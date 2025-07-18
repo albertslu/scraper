@@ -12,8 +12,10 @@ export class StagehandBBBScraper {
   constructor(config: ScraperConfig) {
     this.config = config;
     this.stagehand = new Stagehand({
-      headless: false, // Run in non-headless mode to bypass Cloudflare
-      domSettleTimeoutMs: 2000,
+      env: "LOCAL",
+      domSettleTimeoutMs: 5000,
+      browserName: "firefox", // Try Firefox instead of Chrome
+      headless: false, // Run with visible browser to bypass anti-bot
     });
   }
 
@@ -41,10 +43,13 @@ export class StagehandBBBScraper {
       const page = this.stagehand.page;
       console.log(`🔍 Navigating to: ${pageUrl}`);
       
-      await page.goto(pageUrl, { waitUntil: 'networkidle' });
+      await page.goto(pageUrl, { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 60000 // Increase timeout to 60 seconds
+      });
       
-      // Wait for Cloudflare to resolve
-      await sleep(3000);
+      // Wait for page to fully load and any anti-bot checks
+      await sleep(5000);
       
       // Check if we're on a Cloudflare challenge page
       const isCloudflare = await page.evaluate(() => {
@@ -58,15 +63,27 @@ export class StagehandBBBScraper {
         await sleep(5000);
       }
 
-      // Extract company profile URLs using Stagehand
-      const urlsResult = await page.extract({
-        instruction: "Extract all BBB company profile URLs from the search results. Look for links that go to individual business profiles.",
-        schema: z.object({
-          urls: z.array(z.string().url()).describe("Array of BBB company profile URLs")
-        })
+      // First, let's try using Playwright directly to get the URLs
+      console.log('🔗 Extracting company URLs using Playwright...');
+      const urls = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a[href*="/business/"]'));
+        return links
+          .map(link => (link as HTMLAnchorElement).href)
+          .filter(url => url.includes('bbb.org') && url.includes('/business/'))
+          .filter(url => !url.includes('#') && !url.includes('?'));
       });
 
-      const urls = urlsResult.urls || [];
+      // If Playwright extraction fails, fallback to Stagehand
+      if (urls.length === 0) {
+        console.log('🤖 Fallback to Stagehand extraction...');
+        const urlsResult = await page.extract({
+          instruction: "Find all business profile links on this page. Look for links that contain '/business/' in their href attribute. Return the complete href URLs.",
+          schema: z.object({
+            urls: z.array(z.string()).describe("Array of complete business profile URLs")
+          })
+        });
+        urls.push(...(urlsResult.urls || []));
+      }
       console.log(`📋 Found ${urls.length} company URLs on page`);
       
       return urls;
@@ -209,4 +226,4 @@ export class StagehandBBBScraper {
       throw error;
     }
   }
-} 
+}

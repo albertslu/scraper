@@ -7,7 +7,7 @@ import path from 'path';
  */
 const DEFAULT_CONFIG: ScraperConfig = {
   baseUrl: 'https://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing',
-  totalPages: 15,
+  totalPages: 2, // Start with just 2 pages for testing
   outputFile: path.join(process.cwd(), 'output', 'medical_billing_companies.csv'),
   rateLimit: 0.5 // 0.5 requests per second (2 second delay)
 };
@@ -49,7 +49,7 @@ export async function scrapeBBB(
     
     if (result.errors.length > 0) {
       console.log('\n❌ Errors encountered:');
-      result.errors.forEach((error, index) => {
+      result.errors.forEach((error: string, index: number) => {
         console.log(`${index + 1}. ${error}`);
       });
     }
