@@ -61,28 +61,56 @@ export class StagehandBBBScraper {
         await sleep(5000);
       }
 
-      // First, let's try using Playwright directly to get the URLs
-      console.log('🔗 Extracting company URLs using Playwright...');
+      // First, let's debug what links are actually on the page
+      console.log('🔗 Debugging links on the page...');
+      const debugInfo = await page.evaluate(() => {
+        const allLinks = Array.from(document.querySelectorAll('a')).slice(0, 10);
+        return {
+          totalLinks: document.querySelectorAll('a').length,
+          sampleLinks: allLinks.map(link => ({
+            href: (link as HTMLAnchorElement).href,
+            text: link.textContent?.trim().substring(0, 50)
+          })),
+          businessLinks: Array.from(document.querySelectorAll('a')).filter(link => 
+            (link as HTMLAnchorElement).href.includes('business') || 
+            (link as HTMLAnchorElement).href.includes('profile')
+          ).slice(0, 5).map(link => (link as HTMLAnchorElement).href)
+        };
+      });
+      
+      console.log(`🔍 Total links on page: ${debugInfo.totalLinks}`);
+      console.log('🔍 Sample links:', debugInfo.sampleLinks);
+      console.log('🔍 Business-related links:', debugInfo.businessLinks);
+
+      // Now try to extract URLs more flexibly
       const urls = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a[href*="/business/"]'));
+        // Look specifically for business profile URLs
+        const links = Array.from(document.querySelectorAll('a')).filter(link => {
+          const href = (link as HTMLAnchorElement).href;
+          
+          // Only get actual business profile URLs
+          return href.includes('bbb.org') && 
+                 href.includes('/profile/') &&
+                 (href.includes('/medical-billing') || href.includes('/billing-services'));
+        });
+        
         return links
           .map(link => (link as HTMLAnchorElement).href)
-          .filter(url => url.includes('bbb.org') && url.includes('/business/'))
-          .filter(url => !url.includes('#') && !url.includes('?'));
+          .filter(url => url.startsWith('http'))
+          .filter(url => !url.includes('#') && !url.includes('?'))
+          .filter(url => !url.includes('/addressId/')); // Remove duplicate address URLs
       });
 
-      // If Playwright extraction fails, fallback to Stagehand
-      if (urls.length === 0) {
-        console.log('🤖 Fallback to Stagehand extraction...');
-        const urlsResult = await page.extract({
-          instruction: "Find all business profile links on this page. Look for links that contain '/business/' in their href attribute. Return the complete href URLs.",
-          schema: z.object({
-            urls: z.array(z.string()).describe("Array of complete business profile URLs")
-          })
-        });
-        urls.push(...(urlsResult.urls || []));
-      }
+      console.log(`🔗 Found ${urls.length} potential URLs with flexible search`);
       console.log(`📋 Found ${urls.length} company URLs on page`);
+      
+      // Debug: show first few URLs
+      if (urls.length > 0) {
+        console.log('🔍 Sample URLs:');
+        urls.slice(0, 3).forEach((url, i) => {
+          console.log(`  ${i + 1}. ${url}`);
+        });
+      }
       
       return urls;
     } catch (error) {
