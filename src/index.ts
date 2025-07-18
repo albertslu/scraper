@@ -8,7 +8,7 @@ import path from 'path';
 const DEFAULT_CONFIG: ScraperConfig = {
   baseUrl: 'https://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing',
   totalPages: 10, // Increase to 10 pages to get more medical billing companies
-  outputFile: path.join(process.cwd(), 'output', 'medical_billing_companies.csv'),
+  outputFile: path.join(process.cwd(), 'output', 'medical_billing_companies_stagehand.csv'),
   rateLimit: 0.5 // 0.5 requests per second (2 second delay)
 };
 
