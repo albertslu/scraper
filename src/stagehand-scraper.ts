@@ -106,13 +106,13 @@ export class StagehandBBBScraper {
 
       // Extract company information using Stagehand
       const companyData = await page.extract({
-        instruction: "Extract the company information including name, phone number, principal contact, street address, and accreditation status from this BBB business profile page.",
+        instruction: "Look for the business name in the main heading, phone number in contact details, principal contact name (owner or contact person), full street address including city and state, and BBB rating or accreditation status. Look for these elements anywhere on the page.",
         schema: CompanySchema.extend({
-          name: z.string().describe("The business/company name"),
-          phone: z.string().optional().describe("Phone number if available"),
-          principal_contact: z.string().optional().describe("Principal contact person or owner name if available"),
-          street_address: z.string().optional().describe("Street address if available"),
-          accreditation_status: z.string().optional().describe("BBB accreditation status (like 'A+', 'A', 'B+', etc.) if available")
+          name: z.string().describe("The main business name from the page title or heading"),
+          phone: z.string().optional().describe("Phone number from contact information section"),
+          principal_contact: z.string().optional().describe("Owner, manager, or contact person name"),
+          street_address: z.string().optional().describe("Complete street address including city and state"),
+          accreditation_status: z.string().optional().describe("BBB accreditation rating like A+, A, B+, etc.")
         })
       });
 
