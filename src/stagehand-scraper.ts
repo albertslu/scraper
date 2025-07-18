@@ -14,10 +14,6 @@ export class StagehandBBBScraper {
     this.stagehand = new Stagehand({
       env: "LOCAL",
       domSettleTimeoutMs: 5000,
-      browserName: "chrome", // Using Chrome but with Brave executable
-      headless: false, // Run with visible browser to bypass anti-bot
-      browserWSEndpoint: undefined,
-      browserExecutablePath: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", // Use Brave browser
     });
   }
 
