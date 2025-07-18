@@ -1,212 +1,314 @@
-# BBB Medical Billing Scraper
+# BBB Stagehand Scraper
 
-A Playwright-based Python scraper that collects all A-rated "Medical Billing" listings from the Better Business Bureau (BBB) and exports the data to a clean CSV file.
+A Stagehand-powered web scraper for extracting A-rated Medical Billing companies from the Better Business Bureau (BBB) using LLM-driven browser automation.
 
-## 📋 Project Overview
+## 🎯 Features
 
-This scraper targets A-rated medical billing companies from the BBB search results, extracting company information including phone numbers, addresses, and accreditation status. The scraper is designed for respectful crawling with rate limiting and comprehensive error handling.
+- **LLM-Driven Automation**: Uses Stagehand for intelligent web scraping with natural language instructions
+- **Cloudflare Bypass**: Automatically handles Cloudflare protection
+- **Data Extraction**: Extracts company name, phone, contact, address, and accreditation status
+- **Multiple Output Formats**: CSV export and structured JSON responses
+- **Rate Limiting**: Respectful crawling with configurable delays
+- **Deduplication**: Removes duplicate entries based on name and phone
+- **Error Handling**: Comprehensive error tracking and reporting
 
-## 🎯 Search URL
-
-```
-https://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing&page=1
-```
-
-**URL Parameters:**
-- `filter_category=60548-100` - Medical Billing category
-- `filter_category=60142-000` - Billing Services category  
-- `filter_ratings=A` - Only A-rated businesses
-- `find_country=USA` - United States only
-- `find_text=Medical+Billing` - Search term
-- `page=1` - Page number (1-15)
-
-## 🔧 Method Overview
-
-### Architecture
-- **Browser Engine**: Firefox (via Playwright)
-- **Language**: Python 3.12+
-- **Concurrency**: Asyncio for async/await operations
-- **Rate Limiting**: 2 requests per second with throttling
-- **Data Export**: CSV format with pandas
-
-### Scraping Process
-1. **Initialization**: Launch Firefox browser in non-headless mode
-2. **Connectivity Test**: Verify BBB homepage access and handle Cloudflare challenges
-3. **Search Results Collection**: Scrape pages 1-15 for company URLs
-4. **Data Extraction**: Visit each company profile page to extract detailed information
-5. **Deduplication**: Remove duplicate entries based on name and phone
-6. **CSV Export**: Generate clean CSV with properly formatted data
-
-### Data Fields Extracted
-- `name` - Company name
-- `phone` - Phone number (formatted as +1XXXXXXXXXX)
-- `principal_contact` - Business owner/contact person
-- `url` - BBB business profile URL
-- `street_address` - Physical address
-- `accreditation_status` - BBB accreditation information
-
-## 🚀 Reproduction Instructions
+## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.12+
-- macOS/Linux (Windows support may vary)
-- Sufficient system resources for browser automation
 
-### Setup
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd scraper
-   ```
+- Node.js 16+ 
+- An LLM API key (OpenAI or Anthropic)
+- Chrome/Chromium browser installed
 
-2. **Create virtual environment**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+### Installation
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Install Playwright browsers**
-   ```bash
-   playwright install
-   ```
-
-### Running the Scraper
 ```bash
-# Activate virtual environment
-source venv/bin/activate
+# Clone or download this project
+cd bbb-stagehand
 
-# Run the scraper
-python run_scraper.py
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp env.example .env
+# Edit .env with your API keys
 ```
 
-### Expected Output
-- **Console logs**: Real-time progress and status updates
-- **Log files**: Detailed logs in `logs/bbb_scraper_YYYYMMDD_HHMMSS.log`
-- **CSV output**: Results saved to `output/medical_billing_companies.csv`
+### Basic Usage
 
-### Project Structure
-```
-scraper/
-├── src/
-│   ├── __init__.py
-│   └── bbb_scraper.py          # Main scraper class
-├── output/
-│   └── medical_billing_companies.csv  # Generated results
-├── logs/                       # Timestamped log files
-├── venv/                       # Virtual environment
-├── run_scraper.py             # Simple runner script
-├── requirements.txt           # Python dependencies
-├── .gitignore                 # Git ignore patterns
-└── README.md                  # This file
+```typescript
+import { scrapeBBB } from './src/index';
+
+// Simple usage with defaults
+const result = await scrapeBBB();
+
+// Custom URL and options
+const customResult = await scrapeBBB(
+  'https://www.bbb.org/search?filter_category=60548-100&filter_ratings=A&find_text=Medical+Billing',
+  {
+    totalPages: 5,
+    rateLimit: 1, // 1 request per second
+    outputFile: './my-results.csv'
+  }
+);
 ```
 
-## 📊 Current Results
+### CLI Usage
 
-**Last Run Statistics:**
-- **Pages Scraped**: 15 (complete)
-- **Companies Found**: 213 unique URLs
-- **Companies Processed**: 13 (sample)
-- **Phone Numbers**: 12 successfully formatted
-- **Deduplication**: Working (removed duplicates)
+```bash
+# Run with TypeScript
+npm run dev
 
-**Sample Output (medical_billing_companies.csv):**
+# Or build and run
+npm run build
+npm start
+```
+
+## 📖 API Documentation
+
+### Main Function
+
+```typescript
+scrapeBBB(url?: string, options?: Partial<ScraperConfig>): Promise<ScraperResult>
+```
+
+**Parameters:**
+- `url` (optional): BBB search URL to scrape
+- `options` (optional): Configuration overrides
+
+**Returns:** `ScraperResult` object with companies, errors, and metadata
+
+### Configuration Options
+
+```typescript
+interface ScraperConfig {
+  baseUrl: string;        // BBB search URL
+  totalPages: number;     // Number of pages to scrape (default: 15)
+  outputFile: string;     // CSV output path
+  rateLimit: number;      // Requests per second (default: 0.5)
+}
+```
+
+### Response Format
+
+```typescript
+interface ScraperResult {
+  companies: Company[];   // Array of extracted companies
+  totalFound: number;     // Total unique companies found
+  errors: string[];       // Array of error messages
+  executionTime: number;  // Execution time in milliseconds
+}
+
+interface Company {
+  name: string;
+  phone?: string;                 // Formatted as +1XXXXXXXXXX
+  principal_contact?: string;
+  url: string;                    // BBB profile URL
+  street_address?: string;
+  accreditation_status?: string;  // e.g., "A+", "A", "B+"
+}
+```
+
+## 🔧 Environment Variables
+
+Create a `.env` file with your API keys:
+
+```bash
+# Required: At least one LLM provider
+OPENAI_API_KEY=your_openai_api_key_here
+# OR
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Optional: For production deployment
+BROWSERBASE_API_KEY=your_browserbase_api_key_here
+BROWSERBASE_PROJECT_ID=your_browserbase_project_id_here
+```
+
+## 📝 Example Usage
+
+### Example 1: Basic Scraping
+
+```typescript
+import { scrapeBBB } from './src/index';
+
+async function basicExample() {
+  const result = await scrapeBBB();
+  console.log(`Found ${result.totalFound} companies`);
+  console.log(`Results saved to: medical_billing_companies.csv`);
+}
+```
+
+### Example 2: Custom Configuration
+
+```typescript
+async function customExample() {
+  const result = await scrapeBBB(undefined, {
+    totalPages: 3,
+    rateLimit: 1,
+    outputFile: './custom-output.csv'
+  });
+  
+  return result;
+}
+```
+
+### Example 3: Process Results
+
+```typescript
+async function processResults() {
+  const result = await scrapeBBB();
+  
+  // Filter companies with phone numbers
+  const withPhone = result.companies.filter(c => c.phone);
+  
+  // Get accredited companies
+  const accredited = result.companies.filter(c => c.accreditation_status);
+  
+  console.log(`${withPhone.length} companies have phone numbers`);
+  console.log(`${accredited.length} companies are accredited`);
+}
+```
+
+### Example 4: JSON Output
+
+```typescript
+async function jsonOutput() {
+  const result = await scrapeBBB(undefined, { totalPages: 2 });
+  
+  const jsonResponse = {
+    success: true,
+    timestamp: new Date().toISOString(),
+    summary: {
+      totalCompanies: result.totalFound,
+      executionTimeSeconds: result.executionTime / 1000
+    },
+    data: result.companies
+  };
+  
+  return jsonResponse;
+}
+```
+
+## 🏗️ Architecture
+
+### Stagehand Integration
+
+This scraper replaces traditional Playwright selectors with LLM-driven automation:
+
+```typescript
+// Traditional Playwright (brittle)
+await page.click('button.search-result-link');
+
+// Stagehand (intelligent)
+await page.act("click on the company profile link");
+
+// Data extraction with natural language
+const company = await page.extract({
+  instruction: "Extract company name, phone, and address",
+  schema: CompanySchema
+});
+```
+
+### Key Components
+
+- **StagehandBBBScraper**: Main scraper class
+- **Natural Language Instructions**: LLM interprets page content
+- **Schema Validation**: Zod schemas ensure data quality
+- **Rate Limiting**: Respectful crawling delays
+- **Error Handling**: Comprehensive error tracking
+
+## 🎛️ Prompt Format
+
+The scraper uses natural language prompts for data extraction:
+
+```typescript
+// URL extraction prompt
+"Extract all BBB company profile URLs from the search results. Look for links that go to individual business profiles."
+
+// Company details prompt
+"Extract the company information including name, phone number, principal contact, street address, and accreditation status from this BBB business profile page."
+```
+
+## 🔄 Invocation Steps
+
+1. **Initialize**: Start Stagehand browser instance
+2. **Search Pages**: Navigate through BBB search result pages
+3. **Extract URLs**: Use LLM to find company profile links
+4. **Visit Profiles**: Navigate to each company page
+5. **Extract Data**: Use LLM to extract structured company data
+6. **Process**: Format phone numbers, clean text, deduplicate
+7. **Export**: Save to CSV and return structured JSON
+
+## 📊 Output Structure
+
+### CSV Format
 ```csv
 name,phone,principal_contact,url,street_address,accreditation_status
-About,+12107331802,,https://www.bbb.org/us/tx/san-antonio/profile/billing-services/progressive-medical-billing-0825-90020942,,
-About,+18668756527,,https://www.bbb.org/us/ca/san-diego/profile/medical-billing/momentum-billing-1126-172017754,,
-About,+18008285133,,https://www.bbb.org/us/ca/aliso-viejo/profile/medical-billing/centerline-medical-billing-1126-1000116438,,
-...
+"ABC Medical Billing",+12345678901,"John Smith","https://www.bbb.org/us/ca/profile/...","123 Main St","A+"
 ```
 
-## ⚠️ Issues Encountered
+### JSON Format
+```json
+{
+  "companies": [
+    {
+      "name": "ABC Medical Billing",
+      "phone": "+12345678901",
+      "principal_contact": "John Smith",
+      "url": "https://www.bbb.org/us/ca/profile/...",
+      "street_address": "123 Main St",
+      "accreditation_status": "A+"
+    }
+  ],
+  "totalFound": 150,
+  "errors": [],
+  "executionTime": 45000
+}
+```
 
-### 1. Browser Compatibility
-**Issue**: Chromium browser crashes with segmentation faults on macOS
-**Solution**: Switched to Firefox browser engine
-**Impact**: Resolved browser stability issues
+## 🚨 Known Issues & Solutions
 
-### 2. Cloudflare Protection
-**Issue**: BBB website implements Cloudflare anti-bot protection
-**Solution**: 
-- Use non-headless browser mode
-- Implement proper user agent and headers
-- Add wait strategies for challenge completion
-**Impact**: Successfully bypasses protection
+### Cloudflare Protection
+- **Issue**: BBB uses Cloudflare protection
+- **Solution**: Non-headless browser mode with automatic wait detection
 
-### 3. Dynamic Content Loading
-**Issue**: BBB uses dynamic JavaScript content loading
-**Solution**: 
-- Wait for `networkidle` state
-- Add additional timeout delays
-- Multiple selector fallbacks
-**Impact**: Reliable page loading
+### Rate Limiting
+- **Issue**: Aggressive requests may trigger blocks
+- **Solution**: Configurable rate limiting (default: 0.5 req/sec)
 
-### 4. Generic Page Elements
-**Issue**: Company name selectors return generic "About" text instead of actual business names
-**Current Status**: ⚠️ **ONGOING**
-**Root Cause**: BBB page structure uses dynamic content with generic h1 elements
-**Potential Solutions**:
-- Inspect actual DOM structure on business pages
-- Use alternative selectors (meta tags, JSON-LD, etc.)
-- Parse company names from URLs or breadcrumbs
-
-### 5. Rate Limiting
-**Issue**: Need to respect BBB server resources
-**Solution**: Implemented 2-second delays between requests with asyncio-throttle
-**Impact**: Respectful crawling without overwhelming servers
-
-### 6. Memory Management
-**Issue**: Long-running scraping sessions with 200+ companies
-**Solution**: 
-- Proper browser/context cleanup
-- Progressive data saving
-- Memory-efficient processing
-**Impact**: Stable operation for large datasets
+### LLM Accuracy
+- **Issue**: LLM may misinterpret page elements
+- **Solution**: Structured schemas and validation with Zod
 
 ## 🔮 Future Improvements
 
-1. **Company Name Extraction**: Fix selectors to get actual business names
-2. **Data Completeness**: Improve extraction of principal contacts and addresses
-3. **Error Recovery**: Add retry logic for failed page loads
-4. **Performance**: Optimize for faster processing of large datasets
-5. **Data Validation**: Add phone number and address validation
-6. **Export Formats**: Support for JSON, Excel formats
+- [ ] Add support for other business categories
+- [ ] Implement caching for repeated URLs
+- [ ] Add proxy rotation for large-scale scraping
+- [ ] Support for multiple output formats (JSON, XML)
+- [ ] Integration with external APIs for data enrichment
 
-## 📈 Performance Metrics
+## 🤝 Why Stagehand?
 
-- **Average Page Load**: ~3-4 seconds
-- **Company Processing**: ~4 seconds per company
-- **Total Runtime**: ~2.5 minutes for 213 companies (estimated)
-- **Success Rate**: 95%+ for phone number extraction
-- **Memory Usage**: ~200MB peak
+Unlike traditional web scrapers that break when websites change, Stagehand is **goated** because it:
 
-## 🛠️ Dependencies
+- **Adapts to Changes**: LLM interprets page content dynamically
+- **Natural Language**: Write scraping logic in plain English
+- **Self-Healing**: Automatically handles minor UI changes
+- **Production Ready**: Built on battle-tested Playwright
+- **Developer Friendly**: TypeScript support with full type safety
 
-- `playwright==1.40.0` - Browser automation
-- `pandas==2.1.4` - Data manipulation and CSV export  
-- `beautifulsoup4==4.12.2` - HTML parsing
-- `lxml==4.9.4` - XML/HTML processing
-- `requests==2.31.0` - HTTP requests
-- `python-dotenv==1.0.0` - Environment variables
-- `aiofiles==23.2.0` - Async file operations
-- `asyncio-throttle==1.0.2` - Rate limiting
+## 📜 License
 
-## 📄 License
+MIT License - see LICENSE file for details.
 
-This project is for educational and research purposes. Please respect BBB's terms of service and implement appropriate rate limiting when scraping their website.
+## 🆘 Support
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Implement improvements (especially company name extraction!)
-4. Submit a pull request
+For issues or questions:
+1. Check the GitHub issues
+2. Review Stagehand documentation: https://docs.stagehand.dev
+3. Join the Browserbase community: https://www.browserbase.com
 
 ---
 
-**Note**: The scraper successfully finds and processes all A-rated medical billing companies from BBB. The primary remaining task is improving the company name extraction to get actual business names instead of generic page elements.
+Built with 🎭 [Stagehand](https://stagehand.dev) - The AI Browser Automation Framework
