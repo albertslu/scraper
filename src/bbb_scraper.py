@@ -63,30 +63,36 @@ class BBBScraper:
         )
         self.logger = logging.getLogger(__name__)
         
-    async def create_browser(self) -> Browser:
-        """Create and configure the browser instance."""
+    async def create_browser_and_context(self):
+        """Create and configure browser with anti-detection measures."""
         playwright = await async_playwright().start()
+        
+        # More sophisticated browser launch options
         browser = await playwright.chromium.launch(
-            headless=True,
+            headless=False,  # Run with visible browser
             args=[
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-blink-features=AutomationControlled'
             ]
         )
-        return browser
         
-    async def create_page(self, browser: Browser) -> Page:
-        """Create and configure a new page with proper settings."""
+        # Create context with more realistic settings
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
+            timezone_id="America/New_York",
+            extra_http_headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1"
+            }
         )
-        page = await context.new_page()
         
-        return page
+        return playwright, browser, context
         
     def format_phone(self, phone: str) -> Optional[str]:
         """Format phone number to +1XXXXXXXXXX format."""
@@ -113,8 +119,9 @@ class BBBScraper:
     async def extract_company_data(self, page: Page, company_url: str) -> Optional[Dict]:
         """Extract detailed company data from a company's BBB page."""
         try:
-            await page.goto(company_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(2000)  # Additional wait
+            async with self.throttler:
+                await page.goto(company_url, wait_until="networkidle", timeout=30000)
+                await page.wait_for_timeout(2000)  # Additional wait
                 
             company_data = {
                 'name': '',
@@ -130,6 +137,10 @@ class BBBScraper:
                 'h1[data-testid="business-name"]',
                 'h1.business-name',
                 '.business-header h1',
+                '.dtm-business-name',
+                '[data-testid="business-name"]',
+                '.biz-name',
+                '.business-title',
                 'h1'
             ]
             
@@ -147,7 +158,10 @@ class BBBScraper:
                 '[data-testid="phone-number"]',
                 '.phone-number',
                 'a[href^="tel:"]',
-                '.contact-info .phone'
+                '.contact-info .phone',
+                '.dtm-phone',
+                '.business-phone',
+                '[data-testid="phone"]'
             ]
             
             for selector in phone_selectors:
@@ -167,7 +181,10 @@ class BBBScraper:
                 '[data-testid="business-address"]',
                 '.business-address',
                 '.address .street-address',
-                '.contact-info .address'
+                '.contact-info .address',
+                '.dtm-address',
+                '[data-testid="address"]',
+                '.business-location'
             ]
             
             for selector in address_selectors:
@@ -226,24 +243,22 @@ class BBBScraper:
         
         try:
             self.logger.info(f"Scraping page {page_num}: {search_url}")
-            await page.goto(search_url, wait_until="networkidle", timeout=30000)
+            async with self.throttler:
+                await page.goto(search_url, wait_until="networkidle", timeout=30000)
             
             # Check for Cloudflare protection
             title = await page.title()
-            if "Just a moment" in title or "Checking your browser" in title:
-                self.logger.info("Detected Cloudflare protection, waiting...")
-                await page.wait_for_timeout(10000)  # Wait for Cloudflare to pass
-                
-                # Try to wait for the actual page to load
-                try:
-                    await page.wait_for_function(
-                        "document.title !== 'Just a moment...' && document.title !== 'Checking your browser before accessing'",
-                        timeout=30000
-                    )
-                except:
-                    self.logger.warning("Cloudflare challenge may not have completed")
+            self.logger.info(f"Page {page_num} title: {title}")
             
-            await page.wait_for_timeout(3000)
+            if "Just a moment" in title or "Checking your browser" in title:
+                self.logger.info("Detected Cloudflare protection on search page, waiting...")
+                await page.wait_for_function(
+                    "document.title !== 'Just a moment...' && !document.title.includes('Checking your browser')",
+                    timeout=60000
+                )
+                self.logger.info("Cloudflare challenge completed for search page!")
+            
+            await page.wait_for_timeout(5000)  # Give page time to fully load
             
             # Wait for search results to load
             try:
@@ -258,10 +273,15 @@ class BBBScraper:
             
             # Try different selectors for company links
             link_selectors = [
-                '.search-results a[href*="/business/"]',
-                '.business-listing a[href*="/business/"]',
-                '.result-item a[href*="/business/"]',
-                'a[href*="/us/"]'  # BBB business URLs often contain /us/
+                'a[href*="/business/"]',
+                'a[href*="/us/"]',
+                '.search-results a[href*="/profile/"]',
+                '.business-listing a',
+                '.result-item a',
+                '.listing-title a',
+                '.business-name a',
+                '[data-testid="business-link"]',
+                '.search-result-item a'
             ]
             
             for selector in link_selectors:
@@ -291,60 +311,73 @@ class BBBScraper:
             
     async def scrape_all_pages(self) -> List[Dict]:
         """Scrape all pages and extract company data."""
-        playwright = await async_playwright().start()
-        browser = await playwright.chromium.launch(headless=True)
+        self.logger.info("Starting browser...")
         
-        try:
-            # First pass: collect all company URLs
-            all_company_urls = []
+        async with async_playwright() as playwright:
+            browser = await playwright.firefox.launch(
+                headless=False
+            )
+            
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1920, "height": 1080}
             )
+            
             page = await context.new_page()
             
-            for page_num in range(1, self.max_pages + 1):
-                urls = await self.extract_search_results(page, page_num)
-                all_company_urls.extend(urls)
+            try:
+                # Test basic connectivity first
+                self.logger.info("Testing BBB homepage access...")
+                await page.goto("https://www.bbb.org", wait_until="networkidle", timeout=30000)
+                title = await page.title()
+                self.logger.info(f"BBB homepage loaded: {title}")
                 
-                # Check if we've reached the last page
-                if not urls:
-                    self.logger.info(f"No more results found at page {page_num}")
-                    break
-                    
-            await context.close()
-            
-            self.logger.info(f"Total unique companies found: {len(all_company_urls)}")
-            
-            # Second pass: extract detailed data for each company
-            companies_data = []
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1920, "height": 1080}
-            )
-            page = await context.new_page()
-            
-            for i, company_url in enumerate(all_company_urls, 1):
-                self.logger.info(f"Processing company {i}/{len(all_company_urls)}: {company_url}")
+                # Wait for any Cloudflare challenges
+                if "Just a moment" in title or "Checking your browser" in title:
+                    self.logger.info("Detected Cloudflare protection, waiting for challenge to complete...")
+                    await page.wait_for_function(
+                        "document.title !== 'Just a moment...' && !document.title.includes('Checking your browser')",
+                        timeout=60000
+                    )
+                    self.logger.info("Cloudflare challenge completed!")
                 
-                company_data = await self.extract_company_data(page, company_url)
-                if company_data:
-                    companies_data.append(company_data)
+                await page.wait_for_timeout(5000)  # Extra wait
+                
+                # First pass: collect all company URLs
+                all_company_urls = []
+                
+                for page_num in range(1, self.max_pages + 1):  # Scrape all 15 pages
+                    urls = await self.extract_search_results(page, page_num)
+                    all_company_urls.extend(urls)
                     
-                # Progress indicator
-                if i % 10 == 0:
-                    self.logger.info(f"Processed {i}/{len(all_company_urls)} companies")
+                    # Check if we've reached the last page
+                    if not urls:
+                        self.logger.info(f"No more results found at page {page_num}")
+                        break
+                        
+                    await page.wait_for_timeout(3000)  # Rate limiting between pages
+                        
+                self.logger.info(f"Total unique companies found: {len(all_company_urls)}")
+                
+                # Second pass: extract detailed data for each company
+                companies_data = []
+                
+                for i, company_url in enumerate(all_company_urls, 1):  # Process all companies found
+                    self.logger.info(f"Processing company {i}/{len(all_company_urls)}: {company_url}")
                     
-            await context.close()
-            return companies_data
-            
-        finally:
-            await browser.close()
-            await playwright.stop()
+                    company_data = await self.extract_company_data(page, company_url)
+                    if company_data:
+                        companies_data.append(company_data)
+                        
+                    await page.wait_for_timeout(2000)  # Rate limiting between companies
+                        
+                return companies_data
+                
+            except Exception as e:
+                self.logger.error(f"Error in scraping: {str(e)}")
+                raise
+            finally:
+                await browser.close()
             
     def deduplicate_companies(self, companies: List[Dict]) -> List[Dict]:
         """Remove duplicate companies based on name and phone."""
