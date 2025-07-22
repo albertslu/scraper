@@ -40,6 +40,7 @@ export interface GeneratedScript {
   version: number;
   explanation?: string; // Explanation of the approach
   dependencies?: string[]; // Required npm packages
+  changes?: string[]; // List of changes made during refinement
 }
 
 // Test execution result
