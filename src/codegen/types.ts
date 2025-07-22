@@ -38,6 +38,8 @@ export interface GeneratedScript {
   fullCode: string; // Code for full scraping
   createdAt: Date;
   version: number;
+  explanation?: string; // Explanation of the approach
+  dependencies?: string[]; // Required npm packages
 }
 
 // Test execution result
