@@ -69,6 +69,9 @@ export interface ExecutionResult {
     pages: number;
     itemsPerPage: number;
     toolUsed: string;
+    executionId?: string;
+    outputFormat?: string;
+    csvOutput?: string;
   };
 }
 
@@ -80,7 +83,7 @@ export interface CodegenJob {
   script?: GeneratedScript;
   testResult?: TestResult;
   executionResult?: ExecutionResult;
-  status: 'parsing' | 'generating' | 'testing' | 'refining' | 'executing' | 'completed' | 'failed';
+  status: 'parsing' | 'generating' | 'refining' | 'executing' | 'completed' | 'failed';
   iterations: number;
   createdAt: Date;
   updatedAt: Date;

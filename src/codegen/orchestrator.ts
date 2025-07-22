@@ -1,6 +1,7 @@
 import { createPromptParser } from './prompt-parser';
 import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
+import { createExecutionModule, ExecutionConfig } from './execution-module';
 import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +15,7 @@ export class CodegenOrchestrator {
   private promptParser = createPromptParser();
   private codeGenerator = createCodeGenerator();
   private refinementEngine = createRefinementEngine();
+  private executionModule = createExecutionModule();
   private config: Required<OrchestratorConfig>;
 
   constructor(config: OrchestratorConfig = {}) {
@@ -143,6 +145,44 @@ export class CodegenOrchestrator {
     }
 
     return job;
+  }
+
+  /**
+   * Execute a generated script and return results
+   */
+  async executeScript(
+    job: CodegenJob, 
+    config?: Partial<ExecutionConfig>
+  ): Promise<CodegenJob> {
+    if (!job.script) {
+      throw new Error('Job must have a generated script to execute');
+    }
+
+    console.log('🚀 Executing generated scraping script...');
+    await this.updateJobStatus(job, 'executing');
+
+    try {
+      const executionResult = await this.executionModule.executeScript(job.script, config);
+      job.executionResult = executionResult;
+
+      if (executionResult.success) {
+        await this.updateJobStatus(job, 'completed');
+        console.log('✅ Script execution completed successfully!');
+        console.log(`📊 Extracted ${executionResult.totalFound} items`);
+        console.log(`⏱️ Execution time: ${(executionResult.executionTime / 1000).toFixed(2)}s`);
+      } else {
+        await this.updateJobStatus(job, 'failed');
+        console.log('❌ Script execution failed');
+        console.log(`🐛 Errors: ${executionResult.errors.join('; ')}`);
+      }
+
+      return job;
+
+    } catch (error) {
+      await this.updateJobStatus(job, 'failed');
+      console.error('💥 Execution failed:', error);
+      throw error;
+    }
   }
 
   private async updateJobStatus(job: CodegenJob, status: CodegenJob['status']): Promise<void> {
