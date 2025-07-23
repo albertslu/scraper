@@ -176,7 +176,49 @@ export async function main(): Promise<any[]> {
     
     console.log('🔍 Starting scraping...');
     
-    // Your scraping logic here
+    // Navigate to target URL
+    await page.goto('TARGET_URL_HERE', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+    
+    // MANDATORY: Analyze page structure first to find correct selectors
+    console.log('🔍 Analyzing page structure...');
+    const pageStructure = await page.evaluate(() => {
+      const analysis = {
+        title: document.title,
+        mainSelectors: [],
+        linkPatterns: [],
+        dataElements: []
+      };
+      
+      // Find common patterns for data containers
+      const containers = document.querySelectorAll('div[class*="card"], div[class*="item"], div[class*="listing"], li, article');
+      containers.forEach((el, i) => {
+        if (i < 5) { // Limit to first 5 for analysis
+          analysis.dataElements.push({
+            tag: el.tagName.toLowerCase(),
+            classes: Array.from(el.classList),
+            selector: el.tagName.toLowerCase() + (el.className ? '.' + Array.from(el.classList).join('.') : '')
+          });
+        }
+      });
+      
+      // Find link patterns
+      const links = document.querySelectorAll('a[href]');
+      const linkSamples = Array.from(links).slice(0, 10).map(link => ({
+        href: link.href,
+        text: link.textContent?.trim().substring(0, 50),
+        selector: link.getAttribute('class') ? 'a.' + link.getAttribute('class').split(' ').join('.') : 'a'
+      }));
+      analysis.linkPatterns = linkSamples;
+      
+      return analysis;
+    });
+    
+    console.log('📊 Page structure analysis:', JSON.stringify(pageStructure, null, 2));
+    
+    // Your scraping logic here - use the discovered selectors from pageStructure
     
     console.log(\`✅ Scraped \${results.length} items\`);
     return results;

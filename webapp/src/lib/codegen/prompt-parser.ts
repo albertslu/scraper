@@ -137,9 +137,9 @@ export class PromptParser {
     return `You are an expert web scraping analyst. Your job is to analyze user prompts and URLs to extract structured requirements for building web scrapers.
 
 TOOL SELECTION GUIDELINES:
-- **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently.
-- **Playwright**: Use for simple, static sites with predictable structure and reliable selectors. Best for traditional server-rendered pages with consistent HTML structure.
-- **Hybrid**: Use when you need both approaches - Stagehand for navigation/authentication and Playwright for bulk data extraction.
+- **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently. **CRITICAL LIMITATION: 5-minute maximum execution time - avoid for large datasets (>50 items) or tasks requiring many page visits.**
+- **Playwright**: Use for simple, static sites with predictable structure and reliable selectors. Best for traditional server-rendered pages with consistent HTML structure. **No time limits - good for large datasets.**
+- **Hybrid**: Use when you need both approaches - Stagehand for navigation/authentication and Playwright for bulk data extraction. **RECOMMENDED for large datasets on complex sites to bypass Stagehand's 5-minute limit.**
 
 COMPLEXITY ASSESSMENT:
 - **Simple**: Static HTML pages, predictable structure, basic pagination
