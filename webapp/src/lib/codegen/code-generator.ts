@@ -164,11 +164,12 @@ ${fieldsDescription}
 **CRITICAL Code Structure Requirements:**
 - MUST export a function named exactly 'main' with signature: 'export async function main(): Promise<any[]>'
 - Test code should validate the approach on minimal data (limit to first page/few items)
-- Full code should handle pagination, retries, and complete data extraction
+- Full code should handle pagination but LIMIT to reasonable amounts (max 3-5 pages or 100-200 items)
 - The 'main' function should handle all setup, scraping, and cleanup internally
 - Return results as an array of objects matching the schema
 - Use modern TypeScript with proper typing
 - Do NOT include require.main === module blocks or other execution patterns
+- IMPORTANT: Add proper exit conditions to prevent infinite loops and timeouts
 
 Generate executable, production-ready code that can be run immediately.`;
   }

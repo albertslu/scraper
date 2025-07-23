@@ -124,7 +124,7 @@ async function executeGeneratedScraper(jobId: string) {
       // Create orchestrator for execution
       const orchestrator = createOrchestrator({
         maxRefinementAttempts: 1,
-        testTimeout: 600000 // 10 minutes to match execution module
+        testTimeout: 300000 // 5 minutes to prevent runaway executions
       })
 
       console.log('🎬 Executing generated script...')
@@ -154,35 +154,36 @@ async function executeGeneratedScraper(jobId: string) {
         title: job.title || script.title
       }
 
-      const executionResult = await orchestrator.executeScript(codegenJob, {
-        timeout: 600000, // 10 minutes for web scraping
-        maxRetries: 1
+      const updatedJob = await orchestrator.executeScript(codegenJob, {
+        timeout: 300000 // 5 minutes for web scraping
       })
 
-      console.log(`✅ Execution completed: ${executionResult.totalFound} items found`)
+      const result = updatedJob.executionResult!
+
+      console.log(`✅ Execution completed: ${result.totalFound} items found`)
 
       // Save flexible data to database
-      if (executionResult.success && executionResult.data.length > 0) {
-        await db.insertScrapedData(jobId, executionResult.data)
+      if (result.success && result.data.length > 0) {
+        await db.insertScrapedData(jobId, result.data)
         console.log('💾 Flexible data saved to database')
       }
 
       // Update job status to completed
       await db.updateScrapingJob(jobId, {
-        status: executionResult.success ? 'completed' : 'failed',
+        status: result.success ? 'completed' : 'failed',
         completed_at: new Date().toISOString(),
-        total_items: executionResult.totalFound || 0,
-        execution_time: executionResult.executionTime || 0,
-        errors: executionResult.errors && executionResult.errors.length > 0 ? executionResult.errors : undefined
+        total_items: result.totalFound || 0,
+        execution_time: result.executionTime || 0,
+        errors: result.errors && result.errors.length > 0 ? result.errors : undefined
       })
 
       return NextResponse.json({
-        success: executionResult.success,
+        success: result.success,
         jobId: jobId,
         result: {
-          totalFound: executionResult.totalFound || 0,
-          executionTime: executionResult.executionTime || 0,
-          errors: executionResult.errors || []
+          totalFound: result.totalFound || 0,
+          executionTime: result.executionTime || 0,
+          errors: result.errors || []
         }
       })
 

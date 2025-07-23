@@ -21,7 +21,7 @@ export class ExecutionModule {
 
   constructor(config: ExecutionConfig = {}) {
     this.config = {
-      timeout: config.timeout || 600000, // 10 minutes default (web scraping can take time)
+      timeout: config.timeout || 300000, // 5 minutes default (prevent infinite loops)
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
       sandboxDir: config.sandboxDir || './sandbox',
@@ -338,10 +338,13 @@ executeScript().catch(error => {
       
       if (startIndex === -1 || endIndex === -1) {
         console.warn('⚠️ No structured results found in output');
+        console.warn('Stdout length:', stdout.length);
+        console.warn('Looking for:', startMarker);
         return { data: [] };
       }
       
       const jsonStr = stdout.substring(startIndex + startMarker.length, endIndex).trim();
+      console.log('🔍 Parsing JSON result:', jsonStr.length, 'characters');
       const results = JSON.parse(jsonStr);
       
       if (!results.success) {

@@ -16,7 +16,7 @@ interface TableColumn {
 }
 
 interface TableData {
-  id: string
+  item_id: string
   data: Record<string, any>
   created_at: string
   data_type: 'company' | 'flexible'
@@ -379,7 +379,7 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredData.map((item, index) => (
-                  <tr key={item.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <tr key={item.item_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     {columns.map((column) => (
                       <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCellValue(item.data[column.key], column.type)}

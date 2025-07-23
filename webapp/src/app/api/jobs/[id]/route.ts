@@ -9,7 +9,8 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const jobId = params.id
+    const { id } = await params
+    const jobId = id
 
     if (!jobId) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 })
