@@ -168,72 +168,28 @@ export class ExecutionModule {
   ): string {
     const codeToExecute = config.testMode ? script.testCode : script.fullCode;
     
-    // Remove existing imports from the generated code to avoid duplicates
-    const codeWithoutImports = this.removeImports(codeToExecute);
-    
-    const dependencyImports = this.generateImports(script.dependencies || []);
-    const outputPath = join(this.tempDir, `results_${executionId}`);
+    return `${codeToExecute}
 
-    return `${dependencyImports}
-
-// Configuration object for compatibility
-const config = {
-  timeout: ${config.timeout},
-  maxItems: ${config.maxItems},
-  outputFormat: '${config.outputFormat}',
-  testMode: ${config.testMode}
-};
-
-// Generated execution script
-${codeWithoutImports}
-
-// Execution wrapper
+// Execution wrapper - simplified since generated code handles its own initialization
 async function executeScript() {
   try {
     console.log('🎬 Starting scraper execution...');
     const startTime = Date.now();
     
-    // Execute the main function following our standard contract
-    console.log('🔍 Looking for main function...');
+    // Execute the main function (generated code handles browser initialization)
+    console.log('🔍 Executing main function...');
+    const result = await main();
     
-    let mainFunction: Function;
-    let result: any[];
-    
-    try {
-      // Try to import the main function directly
-      const moduleExports = module.exports || {};
-      
-      if (typeof moduleExports.main === 'function') {
-        mainFunction = moduleExports.main;
-        console.log('📋 Found exported main function');
-      } else {
-        // Fallback: try to access main from global scope
-        mainFunction = eval('main');
-        console.log('📋 Found main function in global scope');
-      }
-      
-      // Execute the main function following our contract
-      console.log('🔍 Executing main function...');
-      result = await mainFunction();
-      
-      // Ensure result is an array
-      if (!Array.isArray(result)) {
-        console.warn('⚠️ Main function did not return an array, wrapping result');
-        result = [result];
-      }
-      
-    } catch (error) {
-      throw new Error(\`Failed to execute main function: \${error instanceof Error ? error.message : String(error)}\`);
-    }
+    // Ensure result is an array
+    const results = Array.isArray(result) ? result : [result];
     const endTime = Date.now();
     
-    // Validate and format results (result is already an array from above)
-    console.log(\`✅ Scraping completed: \${result.length} items extracted\`);
+    console.log(\`✅ Scraping completed: \${results.length} items extracted\`);
     console.log(\`⏱️ Execution time: \${(endTime - startTime) / 1000}s\`);
     
     // Limit results if specified
-    const limitedResults = result.slice(0, ${config.maxItems});
-    if (limitedResults.length < result.length) {
+    const limitedResults = results.slice(0, ${config.maxItems});
+    if (limitedResults.length < results.length) {
       console.log(\`⚠️ Results limited to \${config.maxItems} items\`);
     }
     
@@ -245,20 +201,11 @@ async function executeScript() {
       totalFound: limitedResults.length,
       executionTime: endTime - startTime,
       metadata: {
-        originalCount: result.length,
-        limited: limitedResults.length < result.length
+        originalCount: results.length,
+        limited: limitedResults.length < results.length
       }
     }, null, 2));
     console.log('=== EXECUTION_RESULTS_END ===');
-    
-    ${config.outputFormat === 'csv' || config.outputFormat === 'both' ? `
-    // Generate CSV output
-    if (limitedResults.length > 0) {
-      const csvData = this.generateCSV(limitedResults);
-      require('fs').writeFileSync('${outputPath}.csv', csvData);
-      console.log('📄 CSV file generated: ${outputPath}.csv');
-    }
-    ` : ''}
     
   } catch (error: any) {
     console.error('❌ Execution error:', error);
@@ -273,28 +220,6 @@ async function executeScript() {
     console.log('=== EXECUTION_RESULTS_END ===');
     throw error;
   }
-}
-
-// Helper function to generate CSV
-function generateCSV(data: any[]): string {
-  if (data.length === 0) return '';
-  
-  const headers = Object.keys(data[0]);
-  const csvRows = [
-    headers.join(','),
-    ...data.map(row => 
-      headers.map(header => {
-        const value = row[header] || '';
-        // Escape CSV values
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\\n'))) {
-          return '"' + value.replace(/"/g, '""') + '"';
-        }
-        return value;
-      }).join(',')
-    )
-  ];
-  
-  return csvRows.join('\\n');
 }
 
 // Execute the script
