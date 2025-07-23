@@ -18,11 +18,17 @@ export class CodeGenerator {
   /**
    * Generate executable scraping code from parsed requirements
    */
-  async generateScript(requirements: ScrapingRequirements, url: string): Promise<GeneratedScript> {
+  async generateScript(requirements: ScrapingRequirements, url: string, validationResult?: any): Promise<GeneratedScript> {
     const systemPrompt = this.getSystemPrompt();
-    const userPrompt = this.getUserPrompt(requirements, url);
+    const userPrompt = this.getUserPrompt(requirements, url, validationResult);
 
     try {
+      // Debug: Log the actual prompt being sent to the AI
+      console.log('🔍 DEBUG: User prompt being sent to AI:');
+      console.log('--- PROMPT START ---');
+      console.log(userPrompt.substring(0, 2000)); // First 2000 chars
+      console.log('--- PROMPT END ---');
+      
       const response = await this.anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
@@ -120,6 +126,10 @@ export async function main(): Promise<any[]> {
     const page = stagehand.page;
     const results: any[] = [];
     
+    // Time management for BrowserBase 5-minute limit
+    const MAX_EXECUTION_TIME = 4.5 * 60 * 1000; // 4.5 minutes to leave buffer
+    const startTime = Date.now();
+    
     // Your scraping logic here
     console.log('🔍 Starting scraping...');
     
@@ -129,8 +139,15 @@ export async function main(): Promise<any[]> {
       timeout: 30000
     });
     
-    // Extract data using page.extract()
-    // Add pagination logic if needed
+    // EXTRACTION LOGIC: Use semantic analysis to guide page.extract() calls
+    // STEP 1: Review the entities from semantic analysis to understand what to extract
+    // STEP 2: Use the extraction strategy provided in the analysis
+    // STEP 3: Apply the specific field locations and selectors from the analysis
+    // EXAMPLE: If analysis shows "item titles in h2.title", use that in your extract instruction
+    // EXAMPLE: Use page.extract() with natural language that matches the analysis findings
+    // REMEMBER: Keep schemas FLAT - no nested objects or arrays in page.extract()
+    
+    // Add pagination logic if needed based on analysis results
     
     // IMPORTANT: Use safeParse for validation to handle errors gracefully
     // Example validation pattern:
@@ -182,43 +199,13 @@ export async function main(): Promise<any[]> {
       timeout: 30000
     });
     
-    // MANDATORY: Analyze page structure first to find correct selectors
-    console.log('🔍 Analyzing page structure...');
-    const pageStructure = await page.evaluate(() => {
-      const analysis = {
-        title: document.title,
-        mainSelectors: [],
-        linkPatterns: [],
-        dataElements: []
-      };
-      
-      // Find common patterns for data containers
-      const containers = document.querySelectorAll('div[class*="card"], div[class*="item"], div[class*="listing"], li, article');
-      containers.forEach((el, i) => {
-        if (i < 5) { // Limit to first 5 for analysis
-          analysis.dataElements.push({
-            tag: el.tagName.toLowerCase(),
-            classes: Array.from(el.classList),
-            selector: el.tagName.toLowerCase() + (el.className ? '.' + Array.from(el.classList).join('.') : '')
-          });
-        }
-      });
-      
-      // Find link patterns
-      const links = document.querySelectorAll('a[href]');
-      const linkSamples = Array.from(links).slice(0, 10).map(link => ({
-        href: link.href,
-        text: link.textContent?.trim().substring(0, 50),
-        selector: link.getAttribute('class') ? 'a.' + link.getAttribute('class').split(' ').join('.') : 'a'
-      }));
-      analysis.linkPatterns = linkSamples;
-      
-      return analysis;
-    });
-    
-    console.log('📊 Page structure analysis:', JSON.stringify(pageStructure, null, 2));
-    
-    // Your scraping logic here - use the discovered selectors from pageStructure
+    // YOUR SCRAPING LOGIC: Use the semantic analysis to guide extraction
+    // STEP 1: Use the entities information to understand what to extract and where
+    // STEP 2: Use the specific selectors provided in the semantic analysis
+    // STEP 3: Follow the extraction strategy from the analysis
+    // EXAMPLE: If analysis shows "item links at 'a.item-title'", use exactly that selector
+    // EXAMPLE: If analysis indicates detail pages needed, navigate to those pages
+    // DO NOT use generic selectors like [data-testid="..."] - use the analyzed selectors
     
     console.log(\`✅ Scraped \${results.length} items\`);
     return results;
@@ -273,7 +260,7 @@ Analyze the target website and think about the optimal JSON schema and extractio
 Generate production-ready code that can be executed immediately without any modifications.`;
   }
 
-  private getUserPrompt(requirements: ScrapingRequirements, url: string): string {
+  private getUserPrompt(requirements: ScrapingRequirements, url: string, validationResult?: any): string {
     const fieldsDescription = requirements.outputFields
       .map(field => `- ${field.name} (${field.type}): ${field.description} [${field.required ? 'Required' : 'Optional'}]`)
       .join('\n');
@@ -294,6 +281,37 @@ Generate production-ready code that can be executed immediately without any modi
 **Expected Output Fields:**
 ${fieldsDescription}
 
+${validationResult ? `
+**VALIDATED SELECTORS:**
+The target website has been tested and validated selectors are available:
+
+**Page:** ${validationResult.pageTitle}
+**URL:** ${validationResult.url}
+
+**WORKING SELECTORS:**
+${validationResult.recommendations.bestListingSelector ? `- Best Listing Selector: "${validationResult.recommendations.bestListingSelector}"` : '- No reliable listing selector found'}
+${validationResult.recommendations.bestDetailLinkSelector ? `- Best Detail Link Selector: "${validationResult.recommendations.bestDetailLinkSelector}"` : '- No reliable detail link selector found'}
+${validationResult.recommendations.bestPaginationSelector ? `- Best Pagination Selector: "${validationResult.recommendations.bestPaginationSelector}"` : '- No pagination selector found'}
+
+**Extraction Strategy:** ${validationResult.recommendations.extractionStrategy}
+
+**CRITICAL INSTRUCTIONS:**
+1. You MUST use ONLY the validated selectors listed above
+2. These selectors have been tested on the actual page and are guaranteed to work
+3. DO NOT create your own selectors or guess - use exactly what is provided
+4. If a selector is not listed, that functionality is not available on this page
+
+**EXAMPLE USAGE:**
+${validationResult.recommendations.bestListingSelector ? `
+// Use the validated listing selector:
+const items = await page.$$('${validationResult.recommendations.bestListingSelector}');
+` : ''}
+${validationResult.recommendations.bestDetailLinkSelector ? `
+// Use the validated detail link selector:
+const detailLinks = await page.$$('${validationResult.recommendations.bestDetailLinkSelector}');
+` : ''}
+` : ''}
+
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)
@@ -304,10 +322,16 @@ ${fieldsDescription}
 6. Add progress logging and debugging information
 7. **For large datasets (>20 items): Include periodic result output every 10-20 items to handle potential timeouts**
 
-**PERIODIC RESULT OUTPUT PATTERN:**
-For large scraping jobs, output partial results periodically:
+**PERIODIC RESULT OUTPUT AND TIME MANAGEMENT:**
+For large scraping jobs, include time checks and partial results:
 \`\`\`typescript
-// Output partial results every 10-20 items
+// Check time limit before processing each item
+if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+  console.log(\`⏰ Approaching 4.5min limit, stopping early with \${results.length} items\`);
+  break;
+}
+
+// Output partial results every 10-15 items
 if (results.length > 0 && results.length % 15 === 0) {
   console.log('=== PARTIAL_RESULTS_START ===');
   console.log(JSON.stringify({

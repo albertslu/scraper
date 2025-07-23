@@ -2,6 +2,8 @@ import { createPromptParser } from './prompt-parser';
 import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
 import { createExecutionModule, ExecutionConfig } from './execution-module';
+
+import { createSelectorValidator, ValidationResult } from './selector-validator';
 import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,6 +18,8 @@ export class CodegenOrchestrator {
   private codeGenerator = createCodeGenerator();
   private refinementEngine = createRefinementEngine();
   private executionModule = createExecutionModule();
+
+  private selectorValidator = createSelectorValidator();
   private config: Required<OrchestratorConfig>;
 
   constructor(config: OrchestratorConfig = {}) {
@@ -59,11 +63,30 @@ export class CodegenOrchestrator {
       console.log(`📊 Complexity: ${requirements.complexity}`);
       console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Generate initial code
-      await this.updateJobStatus(job, 'generating');
-      console.log('\n🔧 Step 2: Generating executable scraping code...');
+      // Step 2: Validate selectors on actual page
+      console.log('\n🧪 Step 2: Validating selectors on target page...');
       
-      let currentScript = await this.codeGenerator.generateScript(requirements, request.url);
+      let validationResult: ValidationResult | undefined;
+      try {
+        validationResult = await this.selectorValidator.validateSelectorsForPage(
+          request.url,
+          `${requirements.target} - ${requirements.outputFields.map(f => f.name).join(', ')}`
+        );
+        console.log('✅ Selector validation completed successfully');
+        console.log(`📊 Page: ${validationResult.pageTitle}`);
+        console.log(`📊 Best listing selector: ${validationResult.recommendations.bestListingSelector || 'None'}`);
+        console.log(`📊 Best detail link selector: ${validationResult.recommendations.bestDetailLinkSelector || 'None'}`);
+        console.log(`📊 Strategy: ${validationResult.recommendations.extractionStrategy}`);
+      } catch (error) {
+        console.warn('⚠️ Selector validation failed, proceeding without validation:', error);
+        validationResult = undefined;
+      }
+
+      // Step 3: Generate initial code with website analysis
+      await this.updateJobStatus(job, 'generating');
+      console.log('\n🔧 Step 3: Generating executable scraping code...');
+      
+      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, validationResult);
       job.script = currentScript;
       
       console.log('✅ Code generated successfully');

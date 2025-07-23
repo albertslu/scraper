@@ -16,7 +16,7 @@ export const ScrapingRequirementsSchema = z.object({
     filters: z.array(z.string()).nullable().optional().describe("Any filters mentioned (e.g., 'A-rated', 'California only')")
   }),
   outputFields: z.array(z.object({
-    name: z.string().describe("Field name (e.g., 'company_name', 'phone')"),
+    name: z.string().describe("Field name (e.g., 'item_name', 'title', 'price')"),
     type: z.string().describe("Expected data type (e.g., 'string', 'number', 'boolean', 'url', 'email', 'phone', 'date', 'currency', 'rating', 'array', etc.)"),
     required: z.boolean().describe("Whether this field is required"),
     description: z.string().describe("What this field contains")
@@ -89,4 +89,5 @@ export interface CodegenJob {
   createdAt: Date;
   updatedAt: Date;
   title: string; // Generated from prompt
+  validationResult?: any; // Website structure analysis
 } 
