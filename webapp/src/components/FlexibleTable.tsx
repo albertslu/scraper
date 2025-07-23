@@ -361,9 +361,9 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  {columns.map((column) => (
+                  {columns.map((column, columnIndex) => (
                     <th
-                      key={column.key}
+                      key={`header-${column.key}-${columnIndex}`}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       <div className="flex items-center">
@@ -380,8 +380,8 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredData.map((item, index) => (
                   <tr key={item.item_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    {columns.map((column) => (
-                      <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {columns.map((column, columnIndex) => (
+                      <td key={`cell-${item.item_id}-${column.key}-${columnIndex}`} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCellValue(item.data[column.key], column.type)}
                       </td>
                     ))}

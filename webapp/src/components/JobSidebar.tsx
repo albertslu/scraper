@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Clock, CheckCircle2, XCircle, Loader2, Plus, Eye, Calendar, Hash } from 'lucide-react'
 
 interface Job {
-  id: string
+  job_id: string
   title?: string
   prompt?: string
   url: string
@@ -206,10 +206,10 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
           <div className="p-2">
             {jobs.map((job, index) => (
               <div
-                key={job.id || `job-${index}`}
-                onClick={() => onJobSelect(job.id)}
+                key={job.job_id || `job-${index}`}
+                onClick={() => onJobSelect(job.job_id)}
                 className={`mb-2 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                  selectedJobId === job.id
+                  selectedJobId === job.job_id
                     ? 'border-indigo-200 bg-indigo-50 ring-2 ring-indigo-100'
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
