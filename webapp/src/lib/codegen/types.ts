@@ -72,6 +72,7 @@ export interface ExecutionResult {
     executionId?: string;
     outputFormat?: string;
     csvOutput?: string;
+    isPartialResult?: boolean;
   };
 }
 

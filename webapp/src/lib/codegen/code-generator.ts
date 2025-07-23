@@ -201,6 +201,7 @@ export async function main(): Promise<any[]> {
 6. **Logging**: ALWAYS include progress console.log statements
 7. **Return Type**: ALWAYS return an array of scraped items
 8. **Validation**: ALWAYS use \`schema.safeParse()\` instead of \`schema.parse()\` to handle invalid data gracefully
+9. **Periodic Results**: For large datasets, output partial results every 10-20 items to handle timeouts gracefully
 
 **STAGEHAND SPECIFIC RULES:**
 - ALWAYS use \`new Stagehand({ env: "LOCAL", domSettleTimeoutMs: 5000 })\`
@@ -259,6 +260,24 @@ ${fieldsDescription}
 4. Return data matching the exact field schema above
 5. Include appropriate error handling and rate limiting
 6. Add progress logging and debugging information
+7. **For large datasets (>20 items): Include periodic result output every 10-20 items to handle potential timeouts**
+
+**PERIODIC RESULT OUTPUT PATTERN:**
+For large scraping jobs, output partial results periodically:
+\`\`\`typescript
+// Output partial results every 10-20 items
+if (results.length > 0 && results.length % 15 === 0) {
+  console.log('=== PARTIAL_RESULTS_START ===');
+  console.log(JSON.stringify({
+    success: true,
+    data: results,
+    totalFound: results.length,
+    isPartial: true,
+    executionTime: Date.now() - startTime
+  }, null, 2));
+  console.log('=== PARTIAL_RESULTS_END ===');
+}
+\`\`\`
 
 **CRITICAL Code Structure Requirements:**
 - MUST export a function named exactly 'main' with signature: 'export async function main(): Promise<any[]>'

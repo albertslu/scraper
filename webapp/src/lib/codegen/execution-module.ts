@@ -21,7 +21,7 @@ export class ExecutionModule {
 
   constructor(config: ExecutionConfig = {}) {
     this.config = {
-      timeout: config.timeout || 420000, // 7 minutes default
+      timeout: config.timeout || 600000, // 10 minutes default
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
       sandboxDir: config.sandboxDir || './sandbox',
@@ -137,6 +137,40 @@ export class ExecutionModule {
     } catch (error: any) {
       const executionTime = Date.now() - startTime;
       console.error('❌ Execution failed:', error);
+      
+      // Check if we have partial results in stdout (for any failure, not just timeout)
+      if (error.stdout) {
+        console.log('🔍 Process failed but has stdout, checking for partial results...');
+        try {
+          const partialResults = this.parseExecutionOutput(error.stdout, execConfig.outputFormat);
+          if (partialResults.data.length > 0) {
+            console.log(`✅ Found ${partialResults.data.length} partial results from failed process`);
+            
+            // Clean up and return partial results as success
+            this.cleanup(scriptPath);
+            
+            const errorType = error.code === 'TIMEOUT' ? 'timeout' : 'process failure';
+            return {
+              success: true, // Mark as success since we got partial data
+              data: partialResults.data,
+              totalFound: partialResults.data.length,
+              errors: [`${errorType.charAt(0).toUpperCase() + errorType.slice(1)} - partial results returned`],
+              executionTime,
+              metadata: {
+                pages: 1,
+                itemsPerPage: partialResults.data.length,
+                toolUsed: script.toolType,
+                executionId,
+                outputFormat: execConfig.outputFormat,
+                csvOutput: partialResults.csvOutput,
+                isPartialResult: true
+              }
+            };
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Could not parse partial results from failed process:', parseError);
+        }
+      }
       
       // Clean up on error
       this.cleanup(scriptPath);
@@ -255,32 +289,62 @@ executeScript().catch(error => {
     csvOutput?: string;
   } {
     try {
-      const startMarker = '=== EXECUTION_RESULTS_START ===';
-      const endMarker = '=== EXECUTION_RESULTS_END ===';
+      // First try to find final results
+      const finalStartMarker = '=== EXECUTION_RESULTS_START ===';
+      const finalEndMarker = '=== EXECUTION_RESULTS_END ===';
       
-      const startIndex = stdout.indexOf(startMarker);
-      const endIndex = stdout.indexOf(endMarker);
+      const finalStartIndex = stdout.indexOf(finalStartMarker);
+      const finalEndIndex = stdout.indexOf(finalEndMarker);
       
-      if (startIndex === -1 || endIndex === -1) {
-        console.warn('⚠️ No structured results found in output');
-        console.warn('Stdout length:', stdout.length);
-        console.warn('Looking for:', startMarker);
-        return { data: [] };
+      if (finalStartIndex !== -1 && finalEndIndex !== -1) {
+        const jsonStr = stdout.substring(finalStartIndex + finalStartMarker.length, finalEndIndex).trim();
+        console.log('🔍 Parsing final JSON result:', jsonStr.length, 'characters');
+        const results = JSON.parse(jsonStr);
+        
+        if (!results.success) {
+          throw new Error(`Execution failed: ${results.errors?.join('; ')}`);
+        }
+        
+        return {
+          data: results.data || [],
+          csvOutput: outputFormat === 'csv' || outputFormat === 'both' ? 
+            this.generateCSV(results.data || []) : undefined
+        };
       }
       
-      const jsonStr = stdout.substring(startIndex + startMarker.length, endIndex).trim();
-      console.log('🔍 Parsing JSON result:', jsonStr.length, 'characters');
-      const results = JSON.parse(jsonStr);
+      // If no final results, look for the latest partial results
+      console.log('⚠️ No final results found, looking for partial results...');
+      const partialStartMarker = '=== PARTIAL_RESULTS_START ===';
+      const partialEndMarker = '=== PARTIAL_RESULTS_END ===';
       
-      if (!results.success) {
-        throw new Error(`Execution failed: ${results.errors?.join('; ')}`);
+      // Find the last occurrence of partial results
+      let lastPartialStart = -1;
+      let searchStart = 0;
+      while (true) {
+        const found = stdout.indexOf(partialStartMarker, searchStart);
+        if (found === -1) break;
+        lastPartialStart = found;
+        searchStart = found + 1;
       }
       
-      return {
-        data: results.data || [],
-        csvOutput: outputFormat === 'csv' || outputFormat === 'both' ? 
-          this.generateCSV(results.data || []) : undefined
-      };
+      if (lastPartialStart !== -1) {
+        const partialEndIndex = stdout.indexOf(partialEndMarker, lastPartialStart);
+        if (partialEndIndex !== -1) {
+          const jsonStr = stdout.substring(lastPartialStart + partialStartMarker.length, partialEndIndex).trim();
+          console.log('🔍 Parsing latest partial results:', jsonStr.length, 'characters');
+          const results = JSON.parse(jsonStr);
+          
+          return {
+            data: results.data || [],
+            csvOutput: outputFormat === 'csv' || outputFormat === 'both' ? 
+              this.generateCSV(results.data || []) : undefined
+          };
+        }
+      }
+      
+      console.warn('⚠️ No structured results found in output');
+      console.warn('Stdout length:', stdout.length);
+      return { data: [] };
       
     } catch (error) {
       console.error('⚠️ Failed to parse execution output:', error);
