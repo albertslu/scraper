@@ -171,18 +171,18 @@ async function executeGeneratedScraper(jobId: string) {
       await db.updateScrapingJob(jobId, {
         status: executionResult.success ? 'completed' : 'failed',
         completed_at: new Date().toISOString(),
-        total_items: executionResult.totalFound,
-        execution_time: executionResult.executionTime,
-        errors: executionResult.errors.length > 0 ? executionResult.errors : undefined
+        total_items: executionResult.totalFound || 0,
+        execution_time: executionResult.executionTime || 0,
+        errors: executionResult.errors && executionResult.errors.length > 0 ? executionResult.errors : undefined
       })
 
       return NextResponse.json({
         success: executionResult.success,
         jobId: jobId,
         result: {
-          totalFound: executionResult.totalFound,
-          executionTime: executionResult.executionTime,
-          errors: executionResult.errors
+          totalFound: executionResult.totalFound || 0,
+          executionTime: executionResult.executionTime || 0,
+          errors: executionResult.errors || []
         }
       })
 
