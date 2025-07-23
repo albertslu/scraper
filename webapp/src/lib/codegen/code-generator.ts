@@ -221,6 +221,12 @@ export async function main(): Promise<any[]> {
 
 Choose the appropriate template based on the tool recommendation and fill in the specific scraping logic. The structure must remain exactly as shown in the templates.
 
+**BEFORE WRITING CODE:**
+Analyze the target website and think about the optimal JSON schema and extraction strategy. Consider:
+- What data is available on listing vs detail pages
+- How to structure schemas for reliable extraction
+- The most efficient navigation pattern
+
 Generate production-ready code that can be executed immediately without any modifications.`;
   }
 
@@ -245,22 +251,6 @@ Generate production-ready code that can be executed immediately without any modi
 **Expected Output Fields:**
 ${fieldsDescription}
 
-**MANDATORY WEBSITE ANALYSIS STEP:**
-For Stagehand scraping, ALWAYS start with this website analysis pattern:
-\`\`\`typescript
-// Step 1: Analyze the website structure first
-console.log('🔍 Analyzing website structure...');
-const pageAnalysis = await page.extract({
-  instruction: "Analyze this page structure. Describe the layout, identify where the target data is located (in cards, tables, lists, etc.), count how many items are visible, and note any pagination or navigation elements.",
-  schema: z.object({
-    pageType: z.string(),
-    dataLocation: z.string(), 
-    itemCount: z.number(),
-    paginationInfo: z.string()
-  })
-});
-console.log('📊 Page Analysis:', pageAnalysis);
-\`\`\`
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)
