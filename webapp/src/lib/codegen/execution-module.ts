@@ -21,7 +21,7 @@ export class ExecutionModule {
 
   constructor(config: ExecutionConfig = {}) {
     this.config = {
-      timeout: config.timeout || 300000, // 5 minutes default (prevent infinite loops)
+      timeout: config.timeout || 420000, // 7 minutes default
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
       sandboxDir: config.sandboxDir || './sandbox',

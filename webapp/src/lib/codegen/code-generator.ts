@@ -210,6 +210,8 @@ export async function main(): Promise<any[]> {
 - Use \`page.extract()\` for data extraction with natural language instructions
 - Use \`page.act()\` for interactions
 - Use \`page.goto()\` for navigation
+- **CRITICAL: ALWAYS use FLAT Zod schemas in page.extract() - NO nested objects or arrays**
+- **MANDATORY: Start with website analysis before data extraction**
 
 **PLAYWRIGHT SPECIFIC RULES:**
 - ALWAYS use \`chromium.launch({ headless: false })\`
@@ -242,6 +244,23 @@ Generate production-ready code that can be executed immediately without any modi
 
 **Expected Output Fields:**
 ${fieldsDescription}
+
+**MANDATORY WEBSITE ANALYSIS STEP:**
+For Stagehand scraping, ALWAYS start with this website analysis pattern:
+\`\`\`typescript
+// Step 1: Analyze the website structure first
+console.log('🔍 Analyzing website structure...');
+const pageAnalysis = await page.extract({
+  instruction: "Analyze this page structure. Describe the layout, identify where the target data is located (in cards, tables, lists, etc.), count how many items are visible, and note any pagination or navigation elements.",
+  schema: z.object({
+    pageType: z.string(),
+    dataLocation: z.string(), 
+    itemCount: z.number(),
+    paginationInfo: z.string()
+  })
+});
+console.log('📊 Page Analysis:', pageAnalysis);
+\`\`\`
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)

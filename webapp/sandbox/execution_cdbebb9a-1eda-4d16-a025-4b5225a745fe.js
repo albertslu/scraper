@@ -3,11 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.main = main;
 const stagehand_1 = require("@browserbasehq/stagehand");
 const zod_1 = require("zod");
-// Define schema for Y Combinator companies
+// Define schema for Y Combinator company data
 const CompanySchema = zod_1.z.object({
     company_name: zod_1.z.string(),
     year: zod_1.z.number(),
-    founders: zod_1.z.array(zod_1.z.string())
+    founders: zod_1.z.array(zod_1.z.string()),
+    social_url: zod_1.z.string().url()
 });
 async function main() {
     // Initialize Stagehand
@@ -21,131 +22,120 @@ async function main() {
         const page = stagehand.page;
         const results = [];
         const maxCompanies = 150; // Reasonable limit to prevent infinite scraping
-        const maxPages = 5; // Limit pagination
+        const maxPages = 5; // Limit pagination to prevent infinite loops
         let currentPage = 1;
-        let totalProcessed = 0;
-        console.log('🔍 Starting Y Combinator companies scraping (FULL MODE)...');
-        // Navigate to Y Combinator companies directory
+        let processedCompanies = 0;
+        console.log('🔍 Starting comprehensive Y Combinator companies scraping...');
+        // Navigate to Y Combinator companies page
         await page.goto('https://www.ycombinator.com/companies', {
             waitUntil: 'networkidle',
             timeout: 30000
         });
-        console.log('📄 Loaded Y Combinator companies page');
-        while (currentPage <= maxPages && totalProcessed < maxCompanies) {
+        console.log('📄 Loaded YC companies page');
+        while (currentPage <= maxPages && processedCompanies < maxCompanies) {
             console.log(`📄 Processing page ${currentPage}...`);
-            // Wait for content to load
+            // Wait for page to fully load
             await page.waitForTimeout(3000);
             // Extract companies from current page
             const companiesData = await page.extract({
-                instruction: "Extract all companies visible on this page of the Y Combinator companies directory. For each company, get the company name and founding year or batch year. Return as an array of objects with 'name' and 'year' fields.",
+                instruction: "Extract all Y Combinator companies visible on this page. For each company, get the company name, batch year, and the link to their detailed company page. If there are many companies, extract up to 30 from this page.",
                 schema: zod_1.z.object({
                     companies: zod_1.z.array(zod_1.z.object({
                         name: zod_1.z.string(),
-                        year: zod_1.z.number()
-                    }))
+                        year: zod_1.z.number(),
+                        detailUrl: zod_1.z.string()
+                    })),
+                    hasNextPage: zod_1.z.boolean().optional()
                 })
             });
-            console.log(`📊 Found ${companiesData.companies.length} companies on page ${currentPage}`);
-            if (companiesData.companies.length === 0) {
-                console.log('📄 No more companies found, ending pagination');
-                break;
-            }
-            // Process each company to get founder information
-            const companiesToProcess = companiesData.companies.slice(0, maxCompanies - totalProcessed);
-            for (let i = 0; i < companiesToProcess.length; i++) {
-                const company = companiesToProcess[i];
-                console.log(`🔍 Processing company ${totalProcessed + 1}/${Math.min(maxCompanies, totalProcessed + companiesToProcess.length)}: ${company.name}`);
+            console.log(`📋 Found ${companiesData.companies.length} companies on page ${currentPage}`);
+            // Process each company to get detailed information
+            for (const company of companiesData.companies) {
+                if (processedCompanies >= maxCompanies) {
+                    console.log(`🛑 Reached maximum company limit (${maxCompanies})`);
+                    break;
+                }
+                console.log(`🔍 Processing company ${processedCompanies + 1}: ${company.name}`);
                 try {
-                    // Try to find and click on the company link
-                    await page.act({
-                        action: `Click on the link or card for the company "${company.name}"`
+                    // Navigate to company detail page
+                    await page.goto(company.detailUrl, {
+                        waitUntil: 'networkidle',
+                        timeout: 20000
                     });
-                    // Wait for navigation and page load
                     await page.waitForTimeout(2000);
-                    // Extract founder information from the company page
-                    const founderData = await page.extract({
-                        instruction: "Extract the founders of this company. Look for founder names, co-founder information, CEO, or team members listed as founders. Return as an array of founder names.",
+                    // Extract detailed company information
+                    const companyDetails = await page.extract({
+                        instruction: "Extract the founders' names (as an array of strings) and find any social media URL (Twitter, LinkedIn, Facebook, etc.) for this company. Look for social media links, icons, or contact information sections.",
                         schema: zod_1.z.object({
-                            founders: zod_1.z.array(zod_1.z.string())
+                            founders: zod_1.z.array(zod_1.z.string()),
+                            socialUrl: zod_1.z.string().optional()
                         })
                     });
-                    // Prepare the company data
+                    // Prepare the final company data
                     const companyData = {
                         company_name: company.name,
                         year: company.year,
-                        founders: founderData.founders || []
+                        founders: companyDetails.founders || [],
+                        social_url: companyDetails.socialUrl || ""
                     };
-                    // Validate the data
+                    // Validate the data using safeParse
                     const validation = CompanySchema.safeParse(companyData);
                     if (!validation.success) {
-                        console.warn(`⚠️ Skipping invalid company data for ${company.name}:`, validation.error.issues);
-                        totalProcessed++;
+                        console.warn(`⚠️ Skipping invalid company ${company.name}:`, validation.error.issues);
+                        processedCompanies++;
                         continue;
                     }
                     const validatedCompany = validation.data;
                     results.push(validatedCompany);
-                    totalProcessed++;
-                    console.log(`✅ Successfully scraped ${company.name} with ${validatedCompany.founders.length} founders (${results.length} total)`);
-                    // Navigate back to the companies directory
-                    await page.goBack();
-                    await page.waitForTimeout(2000);
-                    // Add rate limiting to be respectful
-                    if (i % 10 === 0 && i > 0) {
-                        console.log('⏳ Rate limiting: waiting 3 seconds...');
-                        await page.waitForTimeout(3000);
-                    }
+                    processedCompanies++;
+                    console.log(`✅ Successfully processed: ${validatedCompany.company_name} (${validatedCompany.year}) - Total: ${results.length}`);
+                    // Rate limiting between requests
+                    await page.waitForTimeout(1500);
                 }
                 catch (error) {
-                    console.warn(`⚠️ Failed to scrape company ${company.name}:`, error);
-                    totalProcessed++;
-                    // Try to navigate back to companies page
-                    try {
-                        await page.goto('https://www.ycombinator.com/companies', {
-                            waitUntil: 'networkidle',
-                            timeout: 15000
-                        });
-                        await page.waitForTimeout(2000);
-                    }
-                    catch (navError) {
-                        console.error('❌ Failed to navigate back to companies page');
-                        break;
-                    }
-                }
-                // Check if we've reached our limit
-                if (totalProcessed >= maxCompanies) {
-                    console.log(`🎯 Reached maximum company limit (${maxCompanies})`);
-                    break;
+                    console.error(`❌ Failed to process company ${company.name}:`, error);
+                    processedCompanies++;
+                    continue;
                 }
             }
             // Check if we should continue to next page
-            if (totalProcessed >= maxCompanies) {
+            if (processedCompanies >= maxCompanies) {
+                console.log(`🛑 Reached maximum company limit (${maxCompanies})`);
                 break;
             }
             // Try to navigate to next page
             try {
-                console.log('📄 Attempting to navigate to next page...');
+                console.log('🔄 Looking for next page...');
+                // Go back to the companies listing page for pagination
+                await page.goto('https://www.ycombinator.com/companies', {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+                await page.waitForTimeout(2000);
+                // Try to find and click next page or load more button
                 const hasNextPage = await page.extract({
-                    instruction: "Check if there is a 'Next' button, pagination arrow, or way to load more companies. Return true if more pages are available.",
+                    instruction: "Check if there is a 'Next' button, 'Load More' button, or pagination controls to get more companies. Return true if more companies can be loaded.",
                     schema: zod_1.z.object({
-                        hasNext: zod_1.z.boolean()
+                        hasMore: zod_1.z.boolean()
                     })
                 });
-                if (!hasNextPage.hasNext) {
+                if (!hasNextPage.hasMore) {
                     console.log('📄 No more pages available');
                     break;
                 }
+                // Try to load more companies or go to next page
                 await page.act({
-                    action: "Click on the next page button or load more companies button"
+                    action: "Click on the next page button, load more button, or any pagination control to show more companies"
                 });
                 await page.waitForTimeout(3000);
                 currentPage++;
             }
             catch (error) {
-                console.log('📄 Could not navigate to next page, ending pagination');
+                console.log('📄 No more pages or pagination failed:', error.message);
                 break;
             }
         }
-        console.log(`✅ Full scraping completed. Scraped ${results.length} companies across ${currentPage} pages`);
+        console.log(`✅ Comprehensive scraping completed. Processed ${results.length} companies across ${currentPage} pages`);
         return results;
     }
     catch (error) {
