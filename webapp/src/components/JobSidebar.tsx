@@ -204,9 +204,9 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
           </div>
         ) : (
           <div className="p-2">
-            {jobs.map((job) => (
+            {jobs.map((job, index) => (
               <div
-                key={job.id}
+                key={job.id || `job-${index}`}
                 onClick={() => onJobSelect(job.id)}
                 className={`mb-2 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
                   selectedJobId === job.id
