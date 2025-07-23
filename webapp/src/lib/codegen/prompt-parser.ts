@@ -75,7 +75,7 @@ export class PromptParser {
               },
               toolRecommendation: {
                 type: "string",
-                enum: ["stagehand", "playwright", "hybrid"],
+                enum: ["stagehand", "playwright"],
                 description: "Recommended scraping tool"
               },
               reasoning: {
