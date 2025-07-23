@@ -131,7 +131,16 @@ export async function main(): Promise<any[]> {
     
     // Extract data using page.extract()
     // Add pagination logic if needed
-    // Validate with schema
+    
+    // IMPORTANT: Use safeParse for validation to handle errors gracefully
+    // Example validation pattern:
+    // const validation = ItemSchema.safeParse(itemData);
+    // if (!validation.success) {
+    //   console.warn(\`⚠️ Skipping invalid item:\`, validation.error.issues);
+    //   continue; // Skip invalid items and continue processing
+    // }
+    // const validatedItem = validation.data;
+    // results.push(validatedItem);
     
     console.log(\`✅ Scraped \${results.length} items\`);
     return results;
@@ -191,6 +200,7 @@ export async function main(): Promise<any[]> {
 5. **Cleanup**: ALWAYS close browser/stagehand in finally block
 6. **Logging**: ALWAYS include progress console.log statements
 7. **Return Type**: ALWAYS return an array of scraped items
+8. **Validation**: ALWAYS use \`schema.safeParse()\` instead of \`schema.parse()\` to handle invalid data gracefully
 
 **STAGEHAND SPECIFIC RULES:**
 - ALWAYS use \`new Stagehand({ env: "LOCAL", domSettleTimeoutMs: 5000 })\`
