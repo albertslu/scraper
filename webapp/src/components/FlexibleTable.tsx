@@ -92,7 +92,15 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
 
   const getColumns = (): TableColumn[] => {
     if (jobDetails?.output_schema) {
-      return jobDetails.output_schema
+      // Transform job schema format to table column format
+      return jobDetails.output_schema.map(field => ({
+        key: field.name,
+        label: field.name.split('_').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' '),
+        type: field.type,
+        required: field.required
+      }))
     }
 
     // For legacy jobs, return fixed schema
