@@ -146,9 +146,9 @@ COMPLEXITY ASSESSMENT:
 - **Medium**: Some JavaScript rendering, moderate pagination, standard forms
 - **Complex**: Heavy JavaScript, anti-bot protection, complex authentication, dynamic loading
 
-OUTPUT FIELD INFERENCE:
-- Analyze the prompt to understand what data the user wants
-- Infer field names using snake_case convention
+OUTPUT FIELD EXTRACTION RULES:
+- ONLY extract fields that the user explicitly mentions in their prompt
+- Use snake_case convention for field names
 - Determine appropriate data types based on the content (e.g., string, number, boolean, url, email, phone, date, currency, rating, array, object, etc.)
 - Be specific with types: use 'phone' for phone numbers, 'email' for emails, 'url' for links, 'date' for dates, 'currency' for prices, 'rating' for ratings/scores, 'array' for lists
 - Mark fields as required based on the user's emphasis and typical use cases
