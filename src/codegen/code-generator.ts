@@ -112,14 +112,106 @@ TOOL-SPECIFIC CODE GENERATION:
 - Switch to Playwright for bulk data extraction once content is loaded
 - Clearly separate the two approaches in the code
 
+PARALLEL WORKER ARCHITECTURE:
+
+**When to Use Parallel Workers:**
+- Large datasets (>100 items expected)
+- Multiple pages to scrape (>5 pages)
+- Timeout issues or slow single-threaded performance
+- Sites that can handle concurrent requests
+
+**Parallel Worker Implementation:**
+1. **URL Collection Phase**: Single worker collects all URLs/items to scrape
+2. **Parallel Processing Phase**: Multiple workers process items concurrently
+3. **Result Aggregation**: Combine results from all workers
+4. **Error Handling**: Graceful failure with partial results
+
+**Parallel Worker Code Structure:**
+\`\`\`typescript
+import { Worker } from 'worker_threads';
+import { cpus } from 'os';
+
+// Main scraper function with parallel workers
+async function scrapeWithWorkers() {
+  const MAX_WORKERS = Math.min(cpus().length, 4); // Limit concurrent workers
+  const BATCH_SIZE = 10; // Items per worker batch
+  
+  // Phase 1: Collect all URLs/items to process
+  const allItems = await collectAllItems();
+  
+  // Phase 2: Split into batches for parallel processing
+  const batches = chunkArray(allItems, BATCH_SIZE);
+  
+  // Phase 3: Process batches in parallel with worker pool
+  const results = await processInParallel(batches, MAX_WORKERS);
+  
+  return results.flat();
+}
+
+// Worker pool implementation
+async function processInParallel(batches: any[][], maxWorkers: number) {
+  const results = [];
+  const activeWorkers = new Set();
+  
+  for (let i = 0; i < batches.length; i += maxWorkers) {
+    const currentBatch = batches.slice(i, i + maxWorkers);
+    const workerPromises = currentBatch.map(batch => processWorkerBatch(batch));
+    
+    const batchResults = await Promise.allSettled(workerPromises);
+    results.push(...batchResults.map(r => r.status === 'fulfilled' ? r.value : []));
+    
+    // Rate limiting between worker batches
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  return results;
+}
+\`\`\`
+
+**Alternative: Browser Context Pool (Recommended for Web Scraping):**
+\`\`\`typescript
+// Use multiple browser contexts instead of worker threads
+async function scrapeWithBrowserPool() {
+  const MAX_CONTEXTS = 3; // Limit concurrent browser contexts
+  const browser = await playwright.chromium.launch();
+  
+  try {
+    // Create context pool
+    const contexts = await Promise.all(
+      Array(MAX_CONTEXTS).fill(0).map(() => browser.newContext())
+    );
+    
+    // Process items using context pool
+    const results = await processWithContextPool(contexts, allItems);
+    
+    return results;
+  } finally {
+    await browser.close();
+  }
+}
+\`\`\`
+
+**Error Handling for Parallel Workers:**
+- Implement retry logic for failed items
+- Use Promise.allSettled() to prevent one failure from stopping all workers
+- Collect and report errors from all workers
+- Provide partial results even if some workers fail
+
+**Rate Limiting for Parallel Workers:**
+- Implement per-worker rate limiting
+- Add delays between worker batch starts
+- Respect server rate limits (typically 1-2 requests per second total)
+- Use exponential backoff for retries
+
 CODE STRUCTURE REQUIREMENTS:
 
 1. **Test Code**: Should scrape only the first page or first few items to validate the approach
 2. **Full Code**: Complete implementation that handles pagination, error recovery, and full data extraction
-3. **Type Safety**: Use proper TypeScript types based on the inferred schema
-4. **Error Handling**: Include try-catch blocks and graceful failure modes
-5. **Rate Limiting**: Include appropriate delays between requests
-6. **Data Validation**: Validate extracted data matches expected schema
+3. **Parallel Processing**: Use parallel workers when beneficial (>50 items or >3 pages)
+4. **Type Safety**: Use proper TypeScript types based on the inferred schema
+5. **Error Handling**: Include try-catch blocks and graceful failure modes
+6. **Rate Limiting**: Include appropriate delays between requests
+7. **Data Validation**: Validate extracted data matches expected schema
 
 BEST PRACTICES:
 - Always include proper imports and dependencies
@@ -127,6 +219,8 @@ BEST PRACTICES:
 - Handle edge cases like empty results, network timeouts, missing elements
 - Return data in the exact schema format specified in requirements
 - Include comments explaining complex logic or site-specific workarounds
+- Use parallel processing judiciously - not all sites benefit from it
+- Implement proper cleanup for browser contexts and workers
 
 Generate production-ready code that can be executed immediately.`;
   }
@@ -159,6 +253,7 @@ ${fieldsDescription}
 4. Return data matching the exact field schema above
 5. Include appropriate error handling and rate limiting
 6. Add progress logging and debugging information
+7. **For large datasets (>5 pages or >50 items): Use parallel browser contexts** for better performance and timeout prevention
 
 **Code Structure:**
 - Test code should validate the approach on minimal data
