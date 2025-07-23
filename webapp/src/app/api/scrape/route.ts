@@ -124,7 +124,7 @@ async function executeGeneratedScraper(jobId: string) {
       // Create orchestrator for execution
       const orchestrator = createOrchestrator({
         maxRefinementAttempts: 1,
-        testTimeout: 60000
+        testTimeout: 600000 // 10 minutes to match execution module
       })
 
       console.log('🎬 Executing generated script...')
@@ -155,7 +155,7 @@ async function executeGeneratedScraper(jobId: string) {
       }
 
       const executionResult = await orchestrator.executeScript(codegenJob, {
-        timeout: 60000,
+        timeout: 600000, // 10 minutes for web scraping
         maxRetries: 1
       })
 
