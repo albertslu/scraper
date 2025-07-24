@@ -124,6 +124,69 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     setExecutionResult(null)
   }
 
+  // Helper function to provide intelligent error suggestions
+  const getErrorSuggestions = (error: string, details?: string) => {
+    const errorText = (error + ' ' + (details || '')).toLowerCase()
+    
+    if (errorText.includes('timeout') || errorText.includes('5 minute')) {
+      return {
+        type: 'timeout',
+        suggestions: [
+          'Timeout issue: Try reducing the scope (fewer pages/items)',
+          'The website might be slow or have anti-bot protection', 
+          'Consider asking for data from just the first page',
+          'Try a simpler prompt with fewer fields to extract'
+        ]
+      }
+    }
+    
+    if (errorText.includes('stagehand') || errorText.includes('schema')) {
+      return {
+        type: 'stagehand',
+        suggestions: [
+          'AI extraction error: Try regenerating with a simpler prompt',
+          'The website structure might be too complex for AI extraction',
+          'Consider asking for fewer fields or a different data format',
+          'Try being more specific about what data you want'
+        ]
+      }
+    }
+    
+    if (errorText.includes('network') || errorText.includes('connection')) {
+      return {
+        type: 'network',
+        suggestions: [
+          'Network issue: Check if the URL is accessible',
+          'The website might be blocking automated requests',
+          'Try a different website or check your internet connection',
+          'Some sites require login or special access'
+        ]
+      }
+    }
+    
+    if (errorText.includes('selector') || errorText.includes('element')) {
+      return {
+        type: 'selector',
+        suggestions: [
+          'Page structure issue: The website layout might have changed',
+          'Try regenerating - our analysis will re-examine the site',
+          'Consider simplifying what data you\'re trying to extract',
+          'The website might use dynamic content that loads slowly'
+        ]
+      }
+    }
+    
+    return {
+      type: 'general',
+      suggestions: [
+        'Try modifying your prompt to be more specific',
+        'Check if the website structure has changed',
+        'Consider simplifying what data you\'re trying to extract',
+        'Make sure the website doesn\'t require login or special access'
+      ]
+    }
+  }
+
   const renderStepIndicator = () => {
     const steps = [
       { id: 'input', label: 'Prompt & URL', completed: currentStep !== 'input' },
@@ -241,6 +304,50 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
                   <p className="mt-1"><strong>Details:</strong> {generationResult.details}</p>
                 )}
               </div>
+              
+              {/* Intelligent suggestions */}
+              {(() => {
+                const suggestions = getErrorSuggestions(generationResult.error || '', generationResult.details)
+                return (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <h4 className="text-sm font-medium text-yellow-800 mb-2">💡 Suggestions to fix this:</h4>
+                    <ul className="text-xs text-yellow-700 space-y-1">
+                      {suggestions.suggestions.map((suggestion, index) => (
+                        <li key={index}>• {suggestion}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
+              
+              {/* Action buttons */}
+              <div className="mt-4 flex space-x-3">
+                <button
+                  onClick={() => {
+                    setGenerationResult(null)
+                    // Stay on input step to let user modify
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  ✏️ Modify Prompt
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      🔄 Try Again
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -291,7 +398,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
         </p>
       </div>
 
-      {generationResult?.success && (
+      {generationResult?.success ? (
         <div className="space-y-6">
           {/* Job Info */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -358,6 +465,24 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
             </button>
           </div>
         </div>
+      ) : (
+        /* Handle case where user is on preview step but generation failed */
+        <div className="text-center py-12">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-red-800 mb-2">No Code Generated</h3>
+            <p className="text-sm text-red-600 mb-4">
+              It looks like code generation failed. Please go back and try again.
+            </p>
+            <button
+              onClick={goBack}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Prompt
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -415,8 +540,60 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
                 <div className="mt-2 text-sm text-red-700">
                   <p><strong>Error:</strong> {executionResult.error}</p>
                   {executionResult.details && (
-                    <p className="mt-1"><strong>Details:</strong> {executionResult.details}</p>
+                    <div className="mt-2">
+                      <p><strong>Details:</strong></p>
+                      <div className="mt-1 p-2 bg-white border border-red-200 rounded text-xs font-mono max-h-32 overflow-y-auto">
+                        {executionResult.details}
+                      </div>
+                    </div>
                   )}
+                </div>
+                
+                {/* Intelligent error suggestions */}
+                {(() => {
+                  const suggestions = getErrorSuggestions(executionResult.error || '', executionResult.details)
+                  return (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                      <h4 className="text-sm font-medium text-yellow-800 mb-2">💡 What you can try:</h4>
+                      <ul className="text-xs text-yellow-700 space-y-1">
+                        {suggestions.suggestions.map((suggestion, index) => (
+                          <li key={index}>• {suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })()}
+                
+                {/* Action buttons for retry */}
+                <div className="mt-4 flex space-x-3">
+                  <button
+                    onClick={() => {
+                      setCurrentStep('input')
+                      setExecutionResult(null)
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    ✏️ Modify Prompt & Regenerate
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExecutionResult(null)
+                      handleExecute()
+                    }}
+                    disabled={isExecuting}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                  >
+                    {isExecuting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      <>
+                        🔄 Try Running Again
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
