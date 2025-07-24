@@ -406,7 +406,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
               </div>
             </div>
           </div>
-        ) : executionResult && (
+        ) : executionResult && !executionResult.success && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-start">
               <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />

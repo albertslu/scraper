@@ -481,22 +481,36 @@ executeScript().catch(error => {
   }
 
   /**
-   * Parse error messages into user-friendly format
+   * Parse error from execution and include stdout/stderr details
    */
   private parseError(error: any): string {
+    let errorMessage = '';
+    
+    // Add the main error message
     if (error.code === 'TIMEOUT') {
-      return `Execution timed out after ${this.config.timeout / 1000} seconds`;
+      errorMessage = `Execution timed out after ${this.config.timeout / 1000} seconds`;
+    } else if (error.message?.includes('ECONNREFUSED')) {
+      errorMessage = 'Network connection failed - check internet connectivity';
+    } else if (error.message?.includes('MODULE_NOT_FOUND')) {
+      errorMessage = 'Missing required dependencies - check package installation';
+    } else {
+      errorMessage = error.message || String(error);
     }
     
-    if (error.message?.includes('ECONNREFUSED')) {
-      return 'Network connection failed - check internet connectivity';
+    // Append stdout/stderr if available for more context
+    const output = [];
+    if (error.stdout && error.stdout.trim()) {
+      output.push(`STDOUT: ${error.stdout.trim()}`);
+    }
+    if (error.stderr && error.stderr.trim()) {
+      output.push(`STDERR: ${error.stderr.trim()}`);
     }
     
-    if (error.message?.includes('MODULE_NOT_FOUND')) {
-      return 'Missing required dependencies - check package installation';
+    if (output.length > 0) {
+      errorMessage += `\n\n${output.join('\n\n')}`;
     }
     
-    return error.message || String(error);
+    return errorMessage;
   }
 
   /**
