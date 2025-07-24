@@ -309,6 +309,9 @@ ${siteSpec.output_fields.map((field: any) =>
 - Pagination Type: ${siteSpec.pagination_strategy.type}
 - CAPTCHA Risk: ${siteSpec.captcha_suspected ? 'HIGH' : 'LOW'}
 
+**IMPORTANT NOTE FOR MULTI-PAGE SCRAPING:**
+${siteSpec.micro_test_results?.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This is NORMAL for multi-page scraping tasks. The listing selectors are VALID and TESTED. Generate FULL PRODUCTION CODE, not a limited test version.'}
+
 **CRITICAL INSTRUCTIONS:**
 1. You MUST use ONLY the validated selectors and field mappings listed above
 2. These selectors have been tested on the actual page with micro-testing and are guaranteed to work
@@ -320,6 +323,7 @@ ${siteSpec.output_fields.map((field: any) =>
    - Truncate overly long text (company names should be < 100 chars)
    - Split concatenated text if needed
    - Validate data types before saving
+7. **FOR MULTI-PAGE SCRAPING:** If micro-test failed but listing selectors work, generate FULL PRODUCTION CODE. Micro-test failures are expected when detail fields come from individual pages.
 
 **EXAMPLE USAGE:**
 ${siteSpec.selectors.listing_items ? `

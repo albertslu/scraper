@@ -24,7 +24,7 @@ export class PreflightAnalyzer {
       const renderResult = await this.fetchAndRender(url);
       
       // Step 2: Probe & Digest (no LLM yet)
-      const artifacts = await this.probeAndDigest(renderResult, url);
+      const artifacts = await this.probeAndDigest(renderResult, url, requirements);
       
       // Step 3: LLM Analyzer Call
       const siteSpec = await this.llmAnalyze(url, requirements, artifacts);
@@ -120,7 +120,7 @@ export class PreflightAnalyzer {
   /**
    * Step 2: Probe & Digest - Extract structured data without LLM
    */
-  private async probeAndDigest(renderResult: any, url: string) {
+  private async probeAndDigest(renderResult: any, url: string, requirements: ScrapingRequirements) {
     console.log('🔬 Probing and digesting page structure...');
     
     const page = renderResult.page;
@@ -140,8 +140,9 @@ export class PreflightAnalyzer {
     // Generate DOM digest
     const domDigest = await this.generateDomDigest(page, listItemAnalysis);
     
-    // Check if detail pages exist
-    const detailDigest = await this.checkDetailPages(page, url);
+    // Check if detail pages exist and validate their selectors
+    const bestListingSelector = listItemAnalysis.find(item => item.count >= 3)?.path;
+    const detailDigest = await this.checkDetailPages(page, url, requirements, bestListingSelector);
     
     // Analyze network calls
     const networkSummary = this.analyzeNetworkCalls(renderResult.networkCalls);
@@ -267,8 +268,14 @@ export class PreflightAnalyzer {
   private async countCandidateSelectors(page: Page) {
     return await page.evaluate(() => {
       const candidates = [
-        '.card', '.item', '.product', '.company', '.listing',
-        '[data-testid]', '[data-id]', 'article', 'li'
+        // Generic content containers
+        '.card', '.item', '.entry', '.listing', '.result',
+        // Data attributes (most reliable)
+        '[data-testid]', '[data-id]', '[data-item]',
+        // Semantic HTML
+        'article', 'li', 'section',
+        // Common patterns
+        '.row', '.grid-item', '.list-item'
       ];
       
       return candidates.map(selector => ({
@@ -319,34 +326,284 @@ export class PreflightAnalyzer {
     };
   }
 
-  private async checkDetailPages(page: Page, baseUrl: string) {
-    // Look for links that might lead to detail pages
-    const detailLinks = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a[href]'));
-      return links
-        .map(link => (link as HTMLAnchorElement).href)
-        .filter(href => href.includes('/') && !href.includes('#'))
-        .slice(0, 5);
-    });
+  private async checkDetailPages(page: Page, baseUrl: string, requirements: ScrapingRequirements, listingSelector?: string) {
+    // Use the validated listing selector to find actual detail page links
+    console.log('🔍 Finding detail pages using validated selectors...');
+    
+    const detailLinks = await page.evaluate((selector) => {
+      if (selector) {
+        // Use the validated listing selector if available
+        const listingLinks = Array.from(document.querySelectorAll(selector));
+        return listingLinks
+          .map(link => (link as HTMLAnchorElement).href)
+          .filter(href => href && href !== window.location.href && !href.includes('#'))
+          .slice(0, 5);
+      } else {
+        // Fallback: look for any links that might be detail pages
+        const allLinks = Array.from(document.querySelectorAll('a[href]'));
+        return allLinks
+          .map(link => (link as HTMLAnchorElement).href)
+          .filter(href => {
+            // Filter for links that look like detail pages
+            const url = new URL(href);
+            return url.hostname === window.location.hostname && 
+                   url.pathname !== window.location.pathname &&
+                   !href.includes('#') &&
+                   !url.pathname.endsWith('/') &&
+                   url.pathname.split('/').length >= 3; // Has some depth
+          })
+          .slice(0, 5);
+      }
+    }, listingSelector);
     
     if (detailLinks.length > 0) {
       try {
-        // Visit first detail link to get sample
-        const detailPage = await page.context().newPage();
-        await detailPage.goto(detailLinks[0], { timeout: 10000 });
-        const sampleHtml = await detailPage.content();
-        await detailPage.close();
+        console.log('🔍 Analyzing detail pages for field extraction...');
+        
+        // Visit 2-3 sample detail pages to validate selectors
+        const detailPageAnalysis = [];
+        const samplesToTest = Math.min(3, detailLinks.length);
+        
+        for (let i = 0; i < samplesToTest; i++) {
+          const detailUrl = detailLinks[i];
+          console.log(`📄 Testing detail page ${i + 1}: ${detailUrl}`);
+          
+          const detailPage = await page.context().newPage();
+          try {
+            await detailPage.goto(detailUrl, { timeout: 15000 });
+            await detailPage.waitForTimeout(2000);
+            
+            // Test selectors for each required field
+            const fieldTests = await this.testDetailPageFields(detailPage, requirements);
+            
+            detailPageAnalysis.push({
+              url: detailUrl,
+              fieldTests,
+              pageTitle: await detailPage.title(),
+              sampleHtml: (await detailPage.content()).substring(0, 1500)
+            });
+            
+          } catch (error) {
+            console.warn(`⚠️ Failed to analyze detail page ${detailUrl}: ${error}`);
+          } finally {
+            await detailPage.close();
+          }
+        }
+        
+        // Aggregate results to find best selectors across all test pages
+        const validatedSelectors = this.aggregateDetailPageSelectors(detailPageAnalysis, requirements);
         
         return {
-          sample_url: detailLinks[0],
-          sample_html: sampleHtml.substring(0, 2000)
+          sample_urls: detailLinks.slice(0, samplesToTest),
+          sample_analysis: detailPageAnalysis,
+          validated_selectors: validatedSelectors,
+          confidence: this.calculateDetailPageConfidence(detailPageAnalysis)
         };
+        
       } catch (error) {
+        console.warn('⚠️ Detail page analysis failed:', error);
         return undefined;
       }
     }
     
     return undefined;
+  }
+
+  /**
+   * Test extraction selectors on a detail page for each required field
+   */
+  private async testDetailPageFields(page: Page, requirements: ScrapingRequirements) {
+    const fieldTests: any = {};
+    
+    for (const field of requirements.outputFields) {
+      const patterns = this.generateFieldSelectorPatterns(field);
+      fieldTests[field.name] = await this.testFieldSelectors(page, patterns, field);
+    }
+    
+    return fieldTests;
+  }
+
+  /**
+   * Generate selector patterns based on field name and type
+   */
+  private generateFieldSelectorPatterns(field: any): string[] {
+    const fieldName = field.name.toLowerCase();
+    const fieldType = field.type.toLowerCase();
+    
+    const patterns: string[] = [];
+    
+    // Generic patterns based on field name
+    patterns.push(
+      `[data-testid*="${fieldName}"]`,
+      `.${fieldName}`,
+      `[class*="${fieldName}"]`,
+      `[data-${fieldName}]`
+    );
+    
+    // Type-specific patterns
+    if (fieldType === 'url' || fieldName.includes('url') || fieldName.includes('link')) {
+      patterns.push(
+        'a[href*="twitter.com"]',
+        'a[href*="linkedin.com"]', 
+        'a[href*="facebook.com"]',
+        '.social a',
+        '.links a',
+        '[class*="social"] a'
+      );
+    }
+    
+    if (fieldName.includes('name') || fieldName.includes('title')) {
+      patterns.push('h1', 'h2', 'h3', '.title', '.name', '.heading');
+    }
+    
+    if (fieldName.includes('year') || fieldName.includes('date') || fieldType.includes('date')) {
+      patterns.push('.year', '.date', '.batch', '.founded', '[data-year]');
+    }
+    
+    if (fieldType === 'array' || fieldName.includes('founder') || fieldName.includes('team')) {
+      patterns.push(
+        '.founder', 
+        '.team .person', 
+        '.founders .name',
+        '.team-member',
+        '.person',
+        '.member'
+      );
+    }
+    
+    // Common content selectors
+    patterns.push('span', 'div', 'p');
+    
+    return patterns;
+  }
+
+  /**
+   * Test multiple selector patterns for a specific field
+   */
+  private async testFieldSelectors(page: Page, patterns: string[], field: any) {
+    const results = [];
+    
+    for (const selector of patterns) {
+      try {
+        const elements = await page.$$(selector);
+        if (elements.length === 0) continue;
+        
+        let sampleData = '';
+        if (field.type === 'array') {
+          // For arrays (like founders), get all matching elements
+          const texts = await Promise.all(
+            elements.slice(0, 5).map(el => el.textContent())
+          );
+          sampleData = texts.filter(t => t?.trim()).join(', ');
+        } else {
+          // For single values, get first element
+          sampleData = await elements[0].textContent() || '';
+          if (field.name.includes('url') || field.type === 'url') {
+            sampleData = await elements[0].getAttribute('href') || sampleData;
+          }
+        }
+        
+        if (sampleData.trim()) {
+          results.push({
+            selector,
+            elementCount: elements.length,
+            sampleData: sampleData.trim().substring(0, 100),
+            confidence: this.scoreFieldSelector(selector, sampleData, field)
+          });
+        }
+        
+      } catch (error) {
+        // Selector failed, continue to next
+      }
+    }
+    
+    return results.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Score how well a selector matches the expected field
+   */
+  private scoreFieldSelector(selector: string, sampleData: string, field: any): number {
+    let score = 1; // Base score
+    
+    // Boost for field name match in selector
+    if (selector.includes(field.name.toLowerCase())) score += 2;
+    
+    // Type-specific scoring
+    if (field.type === 'url' && (sampleData.startsWith('http') || sampleData.includes('.'))) score += 2;
+    if ((field.type === 'number' || field.name.toLowerCase().includes('year')) && /\d{4}/.test(sampleData)) score += 2;
+    if (field.type === 'array' && sampleData.length > 5 && sampleData.length < 200) score += 1;
+    if (field.name.toLowerCase().includes('name') && sampleData.length > 2 && sampleData.length < 100) score += 1;
+    
+    // Boost for specific, non-generic selectors
+    if (selector.includes('data-testid') || selector.includes('#')) score += 1;
+    
+    // Penalty for overly generic selectors
+    if (selector === 'div' || selector === 'span' || selector === 'a') score -= 1;
+    
+    return Math.max(0, score);
+  }
+
+  /**
+   * Find the best selectors across multiple detail pages
+   */
+  private aggregateDetailPageSelectors(analyses: any[], requirements: ScrapingRequirements) {
+    const fieldSelectors: any = {};
+    
+    for (const field of requirements.outputFields) {
+      const allResults = analyses.flatMap(analysis => 
+        analysis.fieldTests[field.name] || []
+      );
+      
+      // Find selector that works across multiple pages
+      const selectorCounts: any = {};
+      allResults.forEach(result => {
+        if (!selectorCounts[result.selector]) {
+          selectorCounts[result.selector] = { count: 0, totalConfidence: 0, samples: [] };
+        }
+        selectorCounts[result.selector].count++;
+        selectorCounts[result.selector].totalConfidence += result.confidence;
+        selectorCounts[result.selector].samples.push(result.sampleData);
+      });
+      
+      // Choose selector that works on most pages with highest confidence
+      const bestSelector = Object.entries(selectorCounts)
+        .map(([selector, stats]: [string, any]) => ({
+          selector,
+          pageCount: stats.count,
+          avgConfidence: stats.totalConfidence / stats.count,
+          samples: stats.samples
+        }))
+        .sort((a, b) => {
+          // Prioritize selectors that work on multiple pages
+          if (a.pageCount !== b.pageCount) return b.pageCount - a.pageCount;
+          return b.avgConfidence - a.avgConfidence;
+        })[0];
+      
+      if (bestSelector && bestSelector.pageCount >= 1) {
+        fieldSelectors[field.name] = {
+          selector: bestSelector.selector,
+          confidence: bestSelector.avgConfidence,
+          tested_on_pages: bestSelector.pageCount,
+          sample_data: bestSelector.samples[0]
+        };
+      }
+    }
+    
+    return fieldSelectors;
+  }
+
+  /**
+   * Calculate confidence in detail page extraction
+   */
+  private calculateDetailPageConfidence(analyses: any[]): number {
+    if (analyses.length === 0) return 0;
+    
+    const successfulPages = analyses.filter(analysis => 
+      Object.values(analysis.fieldTests).some((tests: any) => tests.length > 0)
+    );
+    
+    return successfulPages.length / analyses.length;
   }
 
   private analyzeNetworkCalls(networkCalls: any[]) {

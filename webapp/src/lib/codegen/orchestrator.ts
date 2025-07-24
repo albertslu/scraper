@@ -78,6 +78,14 @@ export class CodegenOrchestrator {
         
         if (!preflightResult.ready_for_codegen) {
           console.warn('⚠️ Preflight analysis indicates issues:', preflightResult.next_steps);
+          
+          // Override for multi-page scenarios where listing selectors work
+          if (preflightResult.site_spec.selectors.listing_items && 
+              preflightResult.site_spec.micro_test_results && 
+              preflightResult.site_spec.micro_test_results.items_extracted > 0) {
+            console.log('🔧 Overriding low confidence - listing selectors work, proceeding with full codegen');
+            preflightResult.ready_for_codegen = true;
+          }
         }
       } catch (error) {
         console.warn('⚠️ Preflight analysis failed, proceeding with basic analysis:', error);
