@@ -13,6 +13,7 @@ export interface ExecutionConfig {
   maxItems?: number; // Maximum items to scrape
   sandboxDir?: string; // Directory for sandboxed execution
   testMode?: boolean; // Whether to run test code or full code
+  retryContext?: any; // Context from previous execution attempts
 }
 
 export class ExecutionModule {

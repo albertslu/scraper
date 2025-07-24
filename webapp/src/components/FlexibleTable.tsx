@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, ExternalLink, Phone, MapPin, User, Award, Calendar, Hash, Eye, Download } from 'lucide-react'
+import { Search, ExternalLink, Phone, MapPin, User, Award, Calendar, Hash, Eye, Download, RefreshCw, AlertCircle, TrendingUp } from 'lucide-react'
 
 interface FlexibleTableProps {
   jobId: string
@@ -31,6 +31,7 @@ interface JobDetails {
   total_items: number
   output_schema?: TableColumn[]
   job_type: 'legacy' | 'flexible'
+  expected_items?: number // Add this to track what user originally requested
 }
 
 export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
@@ -40,6 +41,7 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredData, setFilteredData] = useState<TableData[]>([])
+  const [isRetrying, setIsRetrying] = useState(false)
 
   useEffect(() => {
     if (jobId) {
@@ -87,6 +89,109 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleRetry = async () => {
+    if (!jobDetails) return
+
+    setIsRetrying(true)
+    try {
+      console.log('🔄 Retrying scrape with previous context...')
+      
+      // Prepare context from previous attempt
+      const previousContext = {
+        previousResults: tableData.map(item => item.data),
+        totalFound: tableData.length,
+        expectedItems: extractExpectedItems(jobDetails.prompt || ''),
+        issues: getRetryIssues()
+      }
+
+      const response = await fetch('/api/scrape/retry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          jobId: jobDetails.id,
+          previousContext
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        // Refresh the data to show new results
+        await fetchJobData()
+        console.log('✅ Retry completed successfully')
+      } else {
+        setError(`Retry failed: ${result.error}`)
+      }
+    } catch (error) {
+      setError(`Retry failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsRetrying(false)
+    }
+  }
+
+  const extractExpectedItems = (prompt: string): number => {
+    // Try to extract expected number from prompt
+    const match = prompt.match(/(\d+)\s*(items?|companies?|products?|results?)/i)
+    return match ? parseInt(match[1]) : 50 // Default to 50 if not specified
+  }
+
+  const getRetryIssues = (): string[] => {
+    const issues = []
+    const expectedItems = extractExpectedItems(jobDetails?.prompt || '')
+    const actualItems = tableData.length
+
+    if (actualItems === 0) {
+      issues.push('No items found - selectors may be incorrect')
+    } else if (actualItems < expectedItems * 0.8) {
+      issues.push(`Found ${actualItems} items but expected ~${expectedItems} - may need to check pagination or expand scope`)
+    }
+
+    if (jobDetails?.status === 'failed') {
+      issues.push('Previous execution failed - may need different approach')
+    }
+
+    return issues
+  }
+
+  const shouldShowRetry = (): boolean => {
+    if (!jobDetails || jobDetails.job_type === 'legacy') return false
+    
+    const expectedItems = extractExpectedItems(jobDetails.prompt || '')
+    const actualItems = tableData.length
+    
+    // Show retry if:
+    // 1. No items found (complete failure)
+    // 2. Found significantly fewer items than expected (incomplete)
+    // 3. Job failed
+    return actualItems === 0 || 
+           actualItems < expectedItems * 0.8 || 
+           jobDetails.status === 'failed'
+  }
+
+  const getRetryMessage = (): { type: 'error' | 'warning', message: string } => {
+    const expectedItems = extractExpectedItems(jobDetails?.prompt || '')
+    const actualItems = tableData.length
+
+    if (actualItems === 0) {
+      return {
+        type: 'error',
+        message: 'No items were found. The scraper may have failed to locate the correct elements on the page.'
+      }
+    } else if (actualItems < expectedItems * 0.8) {
+      return {
+        type: 'warning', 
+        message: `Only found ${actualItems} items but expected around ${expectedItems}. The scraper may have missed some data or hit pagination limits.`
+      }
+    }
+
+    return {
+      type: 'error',
+      message: 'The scraping job encountered issues and may not have completed successfully.'
     }
   }
 
@@ -324,16 +429,88 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
             )}
           </div>
           
-          {tableData.length > 0 && (
-            <button
-              onClick={exportToCSV}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </button>
-          )}
+          <div className="flex items-center space-x-3">
+            {shouldShowRetry() && (
+              <button
+                onClick={handleRetry}
+                disabled={isRetrying}
+                className="inline-flex items-center px-4 py-2 border border-orange-300 text-sm font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRetrying ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Regenerate & Retry
+                  </>
+                )}
+              </button>
+            )}
+            
+            {tableData.length > 0 && (
+              <button
+                onClick={exportToCSV}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Retry Alert */}
+        {shouldShowRetry() && (
+          <div className={`mt-4 p-4 rounded-lg border ${
+            getRetryMessage().type === 'error' 
+              ? 'bg-red-50 border-red-200' 
+              : 'bg-yellow-50 border-yellow-200'
+          }`}>
+            <div className="flex items-start">
+              <AlertCircle className={`w-5 h-5 mt-0.5 mr-3 flex-shrink-0 ${
+                getRetryMessage().type === 'error' ? 'text-red-500' : 'text-yellow-500'
+              }`} />
+              <div className="flex-1">
+                <h3 className={`text-sm font-medium ${
+                  getRetryMessage().type === 'error' ? 'text-red-800' : 'text-yellow-800'
+                }`}>
+                  {getRetryMessage().type === 'error' ? 'Scraping Issues Detected' : 'Incomplete Results'}
+                </h3>
+                <p className={`mt-1 text-sm ${
+                  getRetryMessage().type === 'error' ? 'text-red-700' : 'text-yellow-700'
+                }`}>
+                  {getRetryMessage().message}
+                </p>
+                <div className="mt-3">
+                  <button
+                    onClick={handleRetry}
+                    disabled={isRetrying}
+                    className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
+                      getRetryMessage().type === 'error' 
+                        ? 'bg-red-600 hover:bg-red-700' 
+                        : 'bg-yellow-600 hover:bg-yellow-700'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {isRetrying ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Regenerating Code with Context...
+                      </>
+                    ) : (
+                      <>
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        Regenerate Code & Retry
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         {tableData.length > 0 && (

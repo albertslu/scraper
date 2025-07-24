@@ -16,7 +16,7 @@ export class PreflightAnalyzer {
   /**
    * Main entry point: Turn "prompt + URL" into strict SiteSpec
    */
-  async analyze(url: string, requirements: ScrapingRequirements): Promise<PreflightAnalysis> {
+  async analyze(url: string, requirements: ScrapingRequirements, retryContext?: any): Promise<PreflightAnalysis> {
     console.log('🔍 Starting Preflight Analysis...');
     
     try {
@@ -27,7 +27,7 @@ export class PreflightAnalyzer {
       const artifacts = await this.probeAndDigest(renderResult, url, requirements);
       
       // Step 3: LLM Analyzer Call
-      const siteSpec = await this.llmAnalyze(url, requirements, artifacts);
+      const siteSpec = await this.llmAnalyze(url, requirements, artifacts, retryContext);
       
       // Step 4: Micro-Test (auto)
       const microTestResults = await this.microTest(siteSpec);
@@ -641,14 +641,14 @@ export class PreflightAnalyzer {
   /**
    * Step 3: LLM Analyzer Call - Convert artifacts to strict SiteSpec
    */
-  private async llmAnalyze(url: string, requirements: ScrapingRequirements, artifacts: any): Promise<SiteSpec> {
+  private async llmAnalyze(url: string, requirements: ScrapingRequirements, artifacts: any, retryContext?: any): Promise<SiteSpec> {
     console.log('🧠 Running LLM analysis...');
     
     const response = await this.anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       temperature: 0.1,
-      system: this.getAnalysisSystemPrompt(),
+      system: this.getAnalysisSystemPrompt(retryContext),
       messages: [{
         role: "user",
         content: this.buildAnalysisPrompt(url, requirements, artifacts)
@@ -762,8 +762,8 @@ export class PreflightAnalyzer {
     return siteSpec;
   }
 
-  private getAnalysisSystemPrompt(): string {
-    return `You are an expert web scraping analyst. Your job is to analyze website artifacts and create a complete, actionable SiteSpec.
+  private getAnalysisSystemPrompt(retryContext?: any): string {
+    let basePrompt = `You are an expert web scraping analyst. Your job is to analyze website artifacts and create a complete, actionable SiteSpec.
 
 CRITICAL REQUIREMENTS:
 1. Output must be valid according to the SiteSpec schema
@@ -784,6 +784,42 @@ TOOL CHOICE LOGIC:
 - Hybrid: Large datasets where Stagehand finds/navigates but Playwright extracts bulk data
 
 Be precise and actionable.`;
+
+    // Add retry context if this is a retry attempt
+    if (retryContext?.isRetry) {
+      basePrompt += `
+
+🔄 **RETRY CONTEXT - CRITICAL ANALYSIS NEEDED:**
+This is a retry attempt. The previous analysis and scraping failed:
+
+**Previous Failure Analysis:**
+- Previous Tool: ${retryContext.previousAttempt.previousToolType}
+- Items Found: ${retryContext.previousAttempt.totalFound} (Expected: ${retryContext.previousAttempt.expectedItems})
+- Issues: ${retryContext.previousAttempt.issues.join(', ')}
+
+**RETRY STRATEGY PRIORITIES:**
+${retryContext.retryStrategy.map(strategy => `- ${strategy}`).join('\n')}
+
+**CRITICAL RETRY CONSIDERATIONS:**
+1. **Tool Choice**: Previous tool was ${retryContext.previousAttempt.previousToolType} - consider switching if it failed completely
+2. **Selector Strategy**: If 0 items found, previous selectors were wrong - find different/better selectors
+3. **Pagination Handling**: If incomplete results, focus on better pagination detection
+4. **Site Complexity**: Re-assess if site is more complex than initially thought
+
+${retryContext.previousAttempt.sampleData.length > 0 ? 
+  `**Sample Data from Previous Attempt (validate structure):**
+${JSON.stringify(retryContext.previousAttempt.sampleData.slice(0, 1), null, 2)}` : 
+  '**Previous attempt found NO data - focus on basic element detection**'
+}
+
+**MANDATORY RETRY ACTIONS:**
+- If previous tool was Stagehand and found 0 items → Try Playwright with robust CSS selectors
+- If previous tool was Playwright and found 0 items → Try Stagehand with natural language approach
+- If found some but not enough → Focus on pagination and scope expansion
+- Double-check all selectors against the actual artifacts provided`;
+    }
+
+    return basePrompt;
   }
 
   private buildAnalysisPrompt(url: string, requirements: ScrapingRequirements, artifacts: any): string {

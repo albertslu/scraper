@@ -5,6 +5,18 @@ export interface ScrapingRequest {
   url: string;
   prompt: string;
   userId?: string;
+  retryContext?: {
+    previousAttempt: {
+      totalFound: number;
+      expectedItems: number;
+      issues: string[];
+      sampleData: any[];
+      previousToolType: string;
+      previousCode: string;
+    };
+    retryStrategy: string[];
+    isRetry: boolean;
+  };
 }
 
 // LLM-parsed requirements from the prompt

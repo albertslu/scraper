@@ -68,7 +68,7 @@ export class CodegenOrchestrator {
       
       let preflightResult;
       try {
-        preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements);
+        preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements, request.retryContext);
         console.log('✅ Preflight Analysis completed successfully');
         console.log(`📊 Confidence: ${Math.round(preflightResult.confidence * 100)}%`);
         console.log(`📊 Ready for codegen: ${preflightResult.ready_for_codegen ? 'Yes' : 'No'}`);

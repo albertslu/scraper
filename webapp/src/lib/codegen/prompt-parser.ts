@@ -18,7 +18,7 @@ export class PromptParser {
    * Parse a user's natural language prompt and URL to extract structured scraping requirements
    */
   async parsePrompt(request: ScrapingRequest): Promise<ScrapingRequirements> {
-    const systemPrompt = this.getSystemPrompt();
+    const systemPrompt = this.getSystemPrompt(request.retryContext);
     const userPrompt = this.getUserPrompt(request);
 
     try {
@@ -133,8 +133,8 @@ export class PromptParser {
     }
   }
 
-  private getSystemPrompt(): string {
-    return `You are an expert web scraping analyst. Your job is to analyze user prompts and URLs to extract structured requirements for building web scrapers.
+  private getSystemPrompt(retryContext?: ScrapingRequest['retryContext']): string {
+    let basePrompt = `You are an expert web scraping analyst. Your job is to analyze user prompts and URLs to extract structured requirements for building web scrapers.
 
 TOOL SELECTION GUIDELINES:
 - **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently. **⚠️ WARNING: 5-minute hard timeout limit - avoid for large datasets or tasks visiting individual detail pages.**
@@ -158,6 +158,38 @@ OUTPUT FIELD EXTRACTION RULES:
 - Mark fields as required based on the user's emphasis and typical use cases
 
 Be thorough in your analysis and provide clear reasoning for your tool recommendation.`;
+
+    // Add retry context if this is a retry attempt
+    if (retryContext?.isRetry) {
+      basePrompt += `
+
+🔄 **RETRY CONTEXT - LEARN FROM PREVIOUS ATTEMPT:**
+This is a retry attempt. The previous scraping attempt had issues:
+
+**Previous Attempt Results:**
+- Tool Used: ${retryContext.previousAttempt.previousToolType}
+- Items Found: ${retryContext.previousAttempt.totalFound} (Expected: ${retryContext.previousAttempt.expectedItems})
+- Issues Identified: ${retryContext.previousAttempt.issues.join(', ')}
+
+**Retry Strategy Recommendations:**
+${retryContext.retryStrategy.map(strategy => `- ${strategy}`).join('\n')}
+
+**IMPORTANT RETRY CONSIDERATIONS:**
+1. **Tool Choice**: Consider switching tools if the previous one failed (${retryContext.previousAttempt.previousToolType} → try the other option)
+2. **Scope Adjustment**: If too few items found, consider expanding scope or improving pagination handling
+3. **Selector Strategy**: If 0 items found, the selectors were likely wrong - recommend more robust approach
+4. **Complexity Re-assessment**: Re-evaluate complexity based on what actually failed
+
+${retryContext.previousAttempt.sampleData.length > 0 ? 
+  `**Sample Data from Previous Attempt (use as reference):**
+${JSON.stringify(retryContext.previousAttempt.sampleData.slice(0, 2), null, 2)}` : 
+  '**No sample data from previous attempt - selectors likely failed completely**'
+}
+
+Focus on addressing the specific issues that caused the previous attempt to fail or be incomplete.`;
+    }
+
+    return basePrompt;
   }
 
   private getUserPrompt(request: ScrapingRequest): string {
