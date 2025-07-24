@@ -252,6 +252,127 @@ export async function main(): Promise<any[]> {
 - ALWAYS close browser in finally block
 - Use specific CSS selectors and DOM queries
 
+**HYBRID TEMPLATE (Use this for Hybrid Playwright + Stagehand approach):**
+
+\`\`\`typescript
+import { chromium } from 'playwright';
+import { Stagehand } from '@browserbasehq/stagehand';
+import { z } from 'zod';
+
+// Define your schema here
+const ItemSchema = z.object({
+  // Define fields based on requirements
+});
+
+export async function main(): Promise<any[]> {
+  console.log('🔄 Starting HYBRID scraping: Playwright for URLs + Stagehand for content');
+  
+  const browser = await chromium.launch({ headless: false });
+  let stagehand: Stagehand | null = null;
+  
+  try {
+    // PHASE 1: Use Playwright to collect all URLs/items to scrape
+    console.log('📋 Phase 1: Collecting URLs with Playwright...');
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    
+    const allUrls: string[] = [];
+    
+    // Navigate and collect URLs using Playwright's reliable selectors
+    await page.goto('TARGET_URL_HERE', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+    
+    // TODO: Add URL collection logic using validated selectors
+    // Example: Collect detail page URLs, pagination URLs, etc.
+    // Use page.$$eval() or page.locator() with specific CSS selectors
+    // Handle pagination to collect all URLs across multiple pages
+    
+    console.log(\`✅ Phase 1 complete: Collected \${allUrls.length} URLs\`);
+    await context.close();
+    
+    // PHASE 2: Use Stagehand for intelligent content extraction
+    console.log('🎯 Phase 2: Extracting content with Stagehand...');
+    
+    stagehand = new Stagehand({
+      env: "LOCAL",
+      domSettleTimeoutMs: 5000,
+    });
+    
+    await stagehand.init();
+    const stagehandPage = stagehand.page;
+    
+    const results: any[] = [];
+    const MAX_EXECUTION_TIME = 4.5 * 60 * 1000; // 4.5 minutes for Stagehand
+    const startTime = Date.now();
+    
+    // Process URLs with Stagehand for intelligent extraction
+    for (let i = 0; i < allUrls.length; i++) {
+      // Time management for BrowserBase limit
+      if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+        console.log(\`⏰ Approaching Stagehand time limit, stopping at \${results.length} items\`);
+        break;
+      }
+      
+      const url = allUrls[i];
+      console.log(\`🔍 Processing \${i + 1}/\${allUrls.length}: \${url}\`);
+      
+      try {
+        await stagehandPage.goto(url, {
+          waitUntil: 'networkidle',
+          timeout: 30000
+        });
+        
+        // Use Stagehand's natural language extraction
+        // TODO: Add specific extraction logic using page.extract()
+        // Example: const itemData = await stagehandPage.extract({ ... });
+        
+        // Validate and add to results
+        // const validation = ItemSchema.safeParse(itemData);
+        // if (validation.success) {
+        //   results.push(validation.data);
+        // }
+        
+        // Periodic progress output
+        if (results.length > 0 && results.length % 10 === 0) {
+          console.log(\`📊 Progress: \${results.length} items extracted\`);
+        }
+        
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        console.warn(\`⚠️ Failed to extract from \${url}:\`, error);
+        continue;
+      }
+    }
+    
+    console.log(\`✅ Hybrid scraping complete: \${results.length} items extracted\`);
+    return results;
+    
+  } catch (error) {
+    console.error('❌ Hybrid scraping failed:', error);
+    throw error;
+  } finally {
+    if (stagehand) {
+      await stagehand.close();
+      console.log('✅ Stagehand closed');
+    }
+    await browser.close();
+    console.log('✅ Playwright browser closed');
+  }
+}
+\`\`\`
+
+**HYBRID APPROACH GUIDELINES:**
+- **Phase 1 (Playwright)**: Fast, reliable URL collection and pagination handling
+- **Phase 2 (Stagehand)**: Intelligent content extraction with natural language understanding
+- **Time Management**: Limit Stagehand usage to stay under 5-minute timeout
+- **Error Handling**: Continue processing even if individual URLs fail
+- **Rate Limiting**: Add delays between requests to respect server limits
+- **Progress Tracking**: Log progress for both phases
+
 Choose the appropriate template based on the tool recommendation and fill in the specific scraping logic. The structure must remain exactly as shown in the templates.
 
 **BEFORE WRITING CODE:**
@@ -339,6 +460,36 @@ const detailLinks = await page.$$('${siteSpec.selectors.detail_links}');
 ` : ''}
 ` : ''}
 
+
+**HYBRID APPROACH EXAMPLE (when tool recommendation is 'hybrid'):**
+
+For a job board scraping task requiring visiting individual job detail pages:
+
+\`\`\`typescript
+// PHASE 1: Playwright collects all job URLs from listing pages
+const jobUrls = [];
+let currentPage = 1;
+while (currentPage <= 5) { // Limit to prevent infinite loops
+  await page.goto(\`https://example-jobs.com/page/\${currentPage}\`);
+  const pageUrls = await page.$$eval('a.job-link', links => 
+    links.map(link => link.href)
+  );
+  jobUrls.push(...pageUrls);
+  currentPage++;
+}
+
+// PHASE 2: Stagehand extracts detailed content from each job page
+for (const jobUrl of jobUrls.slice(0, 20)) { // Limit for time management
+  await stagehandPage.goto(jobUrl);
+  const jobData = await stagehandPage.extract({
+    instruction: "Extract job details including title, company, salary, description, and requirements",
+    schema: JobSchema
+  });
+  results.push(jobData);
+}
+\`\`\`
+
+This approach combines Playwright's reliable pagination with Stagehand's intelligent content extraction.
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)

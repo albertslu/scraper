@@ -34,7 +34,7 @@ export const ScrapingRequirementsSchema = z.object({
     description: z.string().describe("What this field contains")
   })).describe("Expected output schema fields"),
   complexity: z.enum(['simple', 'medium', 'complex']).describe("Scraping complexity level"),
-  toolRecommendation: z.enum(['stagehand', 'playwright']).describe("Recommended scraping tool"),
+  toolRecommendation: z.enum(['stagehand', 'playwright', 'hybrid']).describe("Recommended scraping tool"),
   reasoning: z.string().describe("Why this tool was recommended")
 });
 

@@ -147,13 +147,19 @@ export class PreflightAnalyzer {
     // Analyze network calls
     const networkSummary = this.analyzeNetworkCalls(renderResult.networkCalls);
     
+    // Detect anti-bot protection
+    const protectionAnalysis = this.detectProtectionSystems(renderResult, page);
+    
     // Generate heuristics
     const heuristics = {
       needs_js: renderResult.staticHtml.length > 0 && renderResult.finalHtml.length > renderResult.staticHtml.length * 1.2,
       has_infinite_scroll: paginationAnalysis.hasInfiniteScroll,
-      captcha_suspected: renderResult.finalHtml.includes('captcha') || renderResult.finalHtml.includes('cloudflare'),
+      captcha_suspected: protectionAnalysis.hasCaptcha,
       has_apis: networkSummary.length > 0,
-      console_errors: renderResult.consoleErrors.length
+      console_errors: renderResult.consoleErrors.length,
+      protection_detected: protectionAnalysis.hasProtection,
+      protection_type: protectionAnalysis.protectionType,
+      protection_details: protectionAnalysis.details
     };
     
     return {
@@ -615,6 +621,91 @@ export class PreflightAnalyzer {
     }));
   }
 
+  /**
+   * Detect anti-bot protection systems
+   */
+  private detectProtectionSystems(renderResult: any, page: any) {
+    const html = renderResult.finalHtml.toLowerCase();
+    const title = renderResult.title.toLowerCase();
+    
+    // Check for Cloudflare protection
+    const cloudflareIndicators = [
+      'cloudflare',
+      'cf-ray',
+      'checking your browser',
+      'please wait while we check your browser',
+      'ddos protection by cloudflare',
+      'challenge-platform'
+    ];
+    
+    // Check for Incapsula protection
+    const incapsulaIndicators = [
+      'incapsula',
+      '_incapsula_resource',
+      'incapsula incident id',
+      'request unsuccessful. incapsula'
+    ];
+    
+    // Check for other protection systems
+    const otherProtectionIndicators = [
+      'access denied',
+      'blocked by administrator',
+      'bot detection',
+      'captcha',
+      'recaptcha',
+      'hcaptcha',
+      'are you a robot',
+      'verify you are human',
+      'security check',
+      'anti-bot'
+    ];
+    
+    let protectionType = 'none';
+    let hasProtection = false;
+    let hasCaptcha = false;
+    const details: string[] = [];
+    
+    // Check Cloudflare
+    if (cloudflareIndicators.some(indicator => html.includes(indicator) || title.includes(indicator))) {
+      protectionType = 'cloudflare';
+      hasProtection = true;
+      details.push('Cloudflare protection detected');
+    }
+    
+    // Check Incapsula
+    if (incapsulaIndicators.some(indicator => html.includes(indicator) || title.includes(indicator))) {
+      protectionType = 'incapsula';
+      hasProtection = true;
+      details.push('Incapsula protection detected');
+    }
+    
+    // Check for CAPTCHA
+    if (['captcha', 'recaptcha', 'hcaptcha', 'are you a robot', 'verify you are human'].some(indicator => html.includes(indicator) || title.includes(indicator))) {
+      hasCaptcha = true;
+      details.push('CAPTCHA challenge detected');
+    }
+    
+    // Check for other protection
+    if (!hasProtection && otherProtectionIndicators.some(indicator => html.includes(indicator) || title.includes(indicator))) {
+      protectionType = 'other';
+      hasProtection = true;
+      details.push('Generic anti-bot protection detected');
+    }
+    
+    // Check for HTTP status indicators (403, 429, etc.)
+    if (renderResult.networkCalls && renderResult.networkCalls.some((call: any) => [403, 429, 503].includes(call.status))) {
+      hasProtection = true;
+      details.push('HTTP blocking status codes detected');
+    }
+    
+    return {
+      hasProtection,
+      protectionType,
+      hasCaptcha,
+      details
+    };
+  }
+
   private inferJsonShape(jsonString: string) {
     try {
       const obj = JSON.parse(jsonString);
@@ -779,9 +870,23 @@ SELECTOR GUIDELINES:
 - Don't invent selectors - only use what's proven to exist
 
 TOOL CHOICE LOGIC:
-- Stagehand: Complex sites with heavy JavaScript, anti-bot protection, or when natural language extraction helps
-- Playwright: Simple sites with predictable structure and reliable selectors
-- Hybrid: Large datasets where Stagehand finds/navigates but Playwright extracts bulk data
+- Stagehand: Complex sites with heavy JavaScript, anti-bot protection, or when natural language extraction helps. **5-minute timeout limit - avoid for large datasets.**
+- Playwright: Simple sites with predictable structure and reliable selectors. **No time limits - good for large datasets.**
+- Hybrid: **RECOMMENDED for multi-page scraping with complex content.** Playwright efficiently collects URLs/handles pagination, then Stagehand extracts content intelligently. **Best of both worlds: reliable navigation + intelligent extraction within time limits.**
+
+**ANTI-BOT PROTECTION DETECTION:**
+- **Cloudflare/Incapsula Protection**: If detected, automatically recommend Playwright with stealth mode for better evasion
+- **CAPTCHA Systems**: Will block automated scraping - recommend finding alternative data sources  
+- **HTTP Blocking (403/429)**: Indicates active bot detection - use Playwright stealth mode
+- **Protection Auto-Response**: When protection detected, override tool choice to 'playwright-stealth' for better success rates
+
+**HYBRID USE CASES:**
+- Multi-page scraping (visiting 5+ individual pages)
+- Directory/catalog sites with rich detail pages
+- When pagination is reliable but content extraction is complex
+- Large datasets requiring intelligent extraction (e-commerce, real estate, job boards)
+
+**IMPORTANT**: If anti-bot protection is detected, include clear warnings in your analysis and consider recommending against scraping this site.
 
 Be precise and actionable.`;
 
@@ -836,6 +941,13 @@ ${JSON.stringify(retryContext.previousAttempt.sampleData.slice(0, 1), null, 2)}`
 - Needs JS: ${artifacts.heuristics.needs_js}
 - Has APIs: ${artifacts.heuristics.has_apis}
 - Console Errors: ${artifacts.heuristics.console_errors}
+
+**🛡️ ANTI-BOT PROTECTION ANALYSIS:**
+- Protection Detected: ${artifacts.heuristics.protection_detected ? 'YES' : 'NO'}
+- Protection Type: ${artifacts.heuristics.protection_type || 'None'}
+- CAPTCHA Detected: ${artifacts.heuristics.captcha_suspected ? 'YES' : 'NO'}
+- Protection Details: ${artifacts.heuristics.protection_details ? artifacts.heuristics.protection_details.join(', ') : 'None'}
+${artifacts.heuristics.protection_detected ? '\n⚠️ WARNING: This site has anti-bot protection. Scraping may fail or be blocked.' : ''}
 
 **List Item Analysis:**
 ${artifacts.listItemAnalysis.slice(0, 3).map((item: any) => 

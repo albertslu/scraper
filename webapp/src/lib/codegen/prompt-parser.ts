@@ -75,7 +75,7 @@ export class PromptParser {
               },
               toolRecommendation: {
                 type: "string",
-                enum: ["stagehand", "playwright"],
+                enum: ["stagehand", "playwright", "hybrid"],
                 description: "Recommended scraping tool"
               },
               reasoning: {
@@ -139,11 +139,19 @@ export class PromptParser {
 TOOL SELECTION GUIDELINES:
 - **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently. **⚠️ WARNING: 5-minute hard timeout limit - avoid for large datasets or tasks visiting individual detail pages.**
 - **Playwright**: Use for simple, static sites with predictable structure and reliable selectors. Best for traditional server-rendered pages with consistent HTML structure. **No time limits - good for large datasets.**
+- **Hybrid**: **IDEAL for multi-page scraping with complex content extraction.** Use when you need to visit many URLs (pagination, detail pages) but the content extraction is complex. Playwright handles URL collection/navigation efficiently, then Stagehand extracts content intelligently within time limits.
 
 **PAGE COUNT CONSIDERATIONS:**
-- **Multiple pages (>1): Consider Playwright** - Multiple pages may exceed Stagehand's 5-minute timeout
 - **Single page (=1): Consider Stagehand** - Single page extraction can work within timeout limits for complex sites
-- **Visiting detail pages: Consider Playwright** - Individual page visits may cause timeouts
+- **Multiple pages (2-5): Consider Hybrid** - Playwright collects URLs, Stagehand extracts content from each page
+- **Many pages (>5): Consider Hybrid or Playwright** - Hybrid if content extraction is complex, Playwright if extraction is straightforward
+- **Visiting detail pages: Strongly consider Hybrid** - Perfect use case for URL collection + intelligent extraction
+
+**HYBRID APPROACH SCENARIOS (HIGHLY RECOMMENDED):**
+- **Multi-page scraping with complex content**: Product catalogs, directory listings, job boards
+- **Sites requiring both navigation reliability and extraction intelligence**: E-commerce, real estate, news sites
+- **Large datasets with rich content**: When you need to visit 10+ pages but extract complex/varied data from each
+- **Time-sensitive complex extraction**: When Stagehand alone would timeout, but Playwright alone would struggle with content complexity
 
 COMPLEXITY ASSESSMENT:
 - **Simple**: Static HTML pages, predictable structure, basic pagination
