@@ -233,7 +233,8 @@ export async function main(): Promise<any[]> {
 9. **Periodic Results**: For large datasets, output partial results every 10-20 items to handle timeouts gracefully
 
 **STAGEHAND SPECIFIC RULES:**
-- ALWAYS use \`new Stagehand({ env: "LOCAL", domSettleTimeoutMs: 5000 })\`
+- **For protected sites**: use \`new Stagehand({ env: "BROWSERBASE", apiKey: process.env.BROWSERBASE_API_KEY, projectId: process.env.BROWSERBASE_PROJECT_ID, browserSettings: { stealth: true, solveCaptchas: true } })\`
+- **For regular sites**: use \`new Stagehand({ env: "LOCAL", domSettleTimeoutMs: 5000 })\`
 - ALWAYS call \`await stagehand.init()\` before use
 - ALWAYS use \`const page = stagehand.page\` after init
 - ALWAYS call \`await stagehand.close()\` in finally block
@@ -373,6 +374,108 @@ export async function main(): Promise<any[]> {
 - **Rate Limiting**: Add delays between requests to respect server limits
 - **Progress Tracking**: Log progress for both phases
 
+**PLAYWRIGHT-STEALTH TEMPLATE (Use this for sites with anti-bot protection):**
+
+\`\`\`typescript
+import { chromium } from 'playwright';
+import { z } from 'zod';
+
+// Define your schema here
+const ItemSchema = z.object({
+  // Define fields based on requirements
+});
+
+export async function main(): Promise<any[]> {
+  console.log('🥷 Starting STEALTH scraping with anti-bot evasion...');
+  
+  const browser = await chromium.launch({ 
+    headless: false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-web-security',
+      '--disable-features=site-per-process',
+      '--no-sandbox',
+      '--disable-setuid-sandbox'
+    ]
+  });
+  
+  try {
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      extraHTTPHeaders: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      }
+    });
+    
+    // Remove webdriver property and other automation indicators
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+      
+      // Mock plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5]
+      });
+      
+      // Mock languages
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en']
+      });
+      
+      // Remove automation flags
+      window.chrome = {
+        runtime: {}
+      };
+    });
+    
+    const page = await context.newPage();
+    const results: any[] = [];
+    
+    console.log('🔍 Starting stealth scraping...');
+    
+    // Navigate with random delays to mimic human behavior
+    await page.goto('TARGET_URL_HERE', {
+      waitUntil: 'networkidle',
+      timeout: 60000 // Longer timeout for protected sites
+    });
+    
+    // Random delay to mimic human reading time
+    await page.waitForTimeout(Math.random() * 3000 + 2000);
+    
+    // TODO: Add stealth extraction logic with human-like delays
+    // Use page.locator() and page.$$eval() with specific CSS selectors
+    // Add random delays between actions: await page.waitForTimeout(Math.random() * 1000 + 500);
+    // Handle pagination with stealth techniques
+    
+    console.log(\`✅ Stealth scraping complete: \${results.length} items\`);
+    return results;
+    
+  } catch (error) {
+    console.error('❌ Stealth scraping failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+    console.log('✅ Stealth browser closed');
+  }
+}
+\`\`\`
+
+**STEALTH GUIDELINES:**
+- **Browser Args**: Use anti-detection arguments to avoid bot detection
+- **User Agent**: Use realistic, recent browser user agents
+- **Headers**: Include standard HTTP headers that real browsers send
+- **Timing**: Add random delays between actions (500-3000ms)
+- **Navigation**: Use longer timeouts for protected sites
+- **Scripts**: Remove webdriver properties and automation indicators
+
 Choose the appropriate template based on the tool recommendation and fill in the specific scraping logic. The structure must remain exactly as shown in the templates.
 
 **BEFORE WRITING CODE:**
@@ -432,6 +535,8 @@ ${siteSpec.output_fields.map((field: any) =>
 - Has APIs: ${siteSpec.has_apis ? 'Yes' : 'No'}
 - Pagination Type: ${siteSpec.pagination_strategy.type}
 - CAPTCHA Risk: ${siteSpec.captcha_suspected ? 'HIGH' : 'LOW'}
+- Anti-Bot Protection: ${siteSpec.protection_detected ? `YES (${siteSpec.protection_type})` : 'NO'}
+${siteSpec.protection_detected ? '🛡️ **PROTECTION DETECTED**: Use stealth mode appropriate for the chosen tool:\n  - Stagehand: Use BrowserBase env with stealth + CAPTCHA solving\n  - Playwright: Use stealth browser args and anti-detection scripts' : ''}
 
 **IMPORTANT NOTE FOR MULTI-PAGE SCRAPING:**
 ${siteSpec.micro_test_results?.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This is NORMAL for multi-page scraping tasks. The listing selectors are VALID and TESTED. Generate FULL PRODUCTION CODE, not a limited test version.'}
@@ -493,12 +598,13 @@ This approach combines Playwright's reliable pagination with Stagehand's intelli
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)
-2. Use ${requirements.toolRecommendation} as the primary approach
+2. Use ${requirements.toolRecommendation} as the primary approach${siteSpec && siteSpec.protection_detected ? ' **with stealth mode enabled due to protection**' : ''}
 3. Handle the specified complexity level (${requirements.complexity})
 4. Return data matching the exact field schema above
 5. Include appropriate error handling and rate limiting
 6. Add progress logging and debugging information
 7. **For large datasets (>20 items): Include periodic result output every 10-20 items to handle potential timeouts**
+${siteSpec && siteSpec.protection_detected ? '\n8. **CRITICAL**: Enable anti-detection features for the chosen tool due to protection detected' : ''}
 
 **PERIODIC RESULT OUTPUT AND TIME MANAGEMENT:**
 For large scraping jobs, include time checks and partial results:

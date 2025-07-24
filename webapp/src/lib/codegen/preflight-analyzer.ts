@@ -21,10 +21,20 @@ export class PreflightAnalyzer {
     
     try {
       // Step 1: Fetch & Render
-      const renderResult = await this.fetchAndRender(url);
+      let renderResult;
+      let usedFallback = false;
+      
+      try {
+        renderResult = await this.fetchAndRender(url);
+      } catch (error) {
+        console.log('⚠️ Preflight analysis failed, using fallback protection detection');
+        // Fallback: Use basic protection detection when preflight fails
+        renderResult = await this.fallbackProtectionDetection(url, error);
+        usedFallback = true;
+      }
       
       // Step 2: Probe & Digest (no LLM yet)
-      const artifacts = await this.probeAndDigest(renderResult, url, requirements);
+      const artifacts = await this.probeAndDigest(renderResult, url, requirements, usedFallback);
       
       // Step 3: LLM Analyzer Call
       const siteSpec = await this.llmAnalyze(url, requirements, artifacts, retryContext);
@@ -120,7 +130,7 @@ export class PreflightAnalyzer {
   /**
    * Step 2: Probe & Digest - Extract structured data without LLM
    */
-  private async probeAndDigest(renderResult: any, url: string, requirements: ScrapingRequirements) {
+  private async probeAndDigest(renderResult: any, url: string, requirements: ScrapingRequirements, usedFallback = false) {
     console.log('🔬 Probing and digesting page structure...');
     
     const page = renderResult.page;
@@ -148,7 +158,9 @@ export class PreflightAnalyzer {
     const networkSummary = this.analyzeNetworkCalls(renderResult.networkCalls);
     
     // Detect anti-bot protection
-    const protectionAnalysis = this.detectProtectionSystems(renderResult, page);
+    const protectionAnalysis = usedFallback && renderResult.protectionDetected 
+      ? renderResult.protectionDetected 
+      : this.detectProtectionSystems(renderResult, page);
     
     // Generate heuristics
     const heuristics = {
@@ -622,6 +634,65 @@ export class PreflightAnalyzer {
   }
 
   /**
+   * Fallback protection detection when preflight analysis fails
+   */
+  private async fallbackProtectionDetection(url: string, error: any) {
+    console.log('🛡️ Running fallback protection detection...');
+    
+    // Try a simple HTTP request to check for protection indicators
+    let protectionType = 'none';
+    let hasProtection = false;
+    let responseText = '';
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      
+      responseText = await response.text();
+      
+      // Check response for protection indicators
+      const lowerText = responseText.toLowerCase();
+      
+      if (lowerText.includes('cloudflare') || lowerText.includes('cf-ray')) {
+        protectionType = 'cloudflare';
+        hasProtection = true;
+      } else if (lowerText.includes('incapsula') || lowerText.includes('_incapsula_resource')) {
+        protectionType = 'incapsula';
+        hasProtection = true;
+      } else if (response.status === 403 || response.status === 429) {
+        protectionType = 'http-blocking';
+        hasProtection = true;
+      }
+      
+    } catch (fetchError) {
+      // If even basic fetch fails, assume strong protection
+      hasProtection = true;
+      protectionType = 'unknown';
+      responseText = `Failed to fetch: ${fetchError}`;
+    }
+    
+    // Return minimal render result for fallback mode
+    return {
+      staticHtml: responseText,
+      finalHtml: responseText,
+      title: hasProtection ? `Protected Site (${protectionType})` : 'Unknown Site',
+      networkCalls: [],
+      consoleErrors: [],
+      page: null, // No page available in fallback
+      isFallback: true,
+      protectionDetected: {
+        hasProtection,
+        protectionType,
+        details: [`Preflight failed: ${error.message}`, `Protection detected via fallback: ${protectionType}`]
+      }
+    };
+  }
+
+  /**
    * Detect anti-bot protection systems
    */
   private detectProtectionSystems(renderResult: any, page: any) {
@@ -813,7 +884,7 @@ export class PreflightAnalyzer {
                 required: ["type", "value"]
               }
             },
-            tool_choice: { type: "string", enum: ["stagehand", "playwright", "hybrid"] },
+            tool_choice: { type: "string", enum: ["stagehand", "playwright", "hybrid", "playwright-stealth"] },
             tool_reasoning: { type: "string" },
             artifacts: {
               type: "object",
@@ -886,7 +957,7 @@ TOOL CHOICE LOGIC:
 - When pagination is reliable but content extraction is complex
 - Large datasets requiring intelligent extraction (e-commerce, real estate, job boards)
 
-**IMPORTANT**: If anti-bot protection is detected, include clear warnings in your analysis and consider recommending against scraping this site.
+**IMPORTANT**: If anti-bot protection is detected, automatically recommend 'playwright-stealth' to maximize success chances with stealth evasion techniques.
 
 Be precise and actionable.`;
 

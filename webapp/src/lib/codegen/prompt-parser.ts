@@ -75,7 +75,7 @@ export class PromptParser {
               },
               toolRecommendation: {
                 type: "string",
-                enum: ["stagehand", "playwright", "hybrid"],
+                enum: ["stagehand", "playwright", "hybrid", "playwright-stealth"],
                 description: "Recommended scraping tool"
               },
               reasoning: {
@@ -140,6 +140,7 @@ TOOL SELECTION GUIDELINES:
 - **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently. **⚠️ WARNING: 5-minute hard timeout limit - avoid for large datasets or tasks visiting individual detail pages.**
 - **Playwright**: Use for simple, static sites with predictable structure and reliable selectors. Best for traditional server-rendered pages with consistent HTML structure. **No time limits - good for large datasets.**
 - **Hybrid**: **IDEAL for multi-page scraping with complex content extraction.** Use when you need to visit many URLs (pagination, detail pages) but the content extraction is complex. Playwright handles URL collection/navigation efficiently, then Stagehand extracts content intelligently within time limits.
+- **Playwright-Stealth**: **AUTO-SELECT when anti-bot protection detected.** Uses advanced evasion techniques including stealth browser args, realistic headers, human-like delays, and automation indicator removal. Best for Cloudflare/Incapsula protected sites.
 
 **PAGE COUNT CONSIDERATIONS:**
 - **Single page (=1): Consider Stagehand** - Single page extraction can work within timeout limits for complex sites
