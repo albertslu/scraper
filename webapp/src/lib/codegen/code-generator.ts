@@ -135,7 +135,7 @@ export async function main(): Promise<any[]> {
     
     // Navigate to target URL
     await page.goto('TARGET_URL_HERE', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded', // Modern SPAs often have continuous network activity
       timeout: 30000
     });
     
@@ -143,9 +143,17 @@ export async function main(): Promise<any[]> {
     // STEP 1: Review the entities from semantic analysis to understand what to extract
     // STEP 2: Use the extraction strategy provided in the analysis
     // STEP 3: Apply the specific field locations and selectors from the analysis
-    // EXAMPLE: If analysis shows "item titles in h2.title", use that in your extract instruction
-    // EXAMPLE: Use page.extract() with natural language that matches the analysis findings
-    // REMEMBER: Keep schemas FLAT - no nested objects or arrays in page.extract()
+    
+    // EXAMPLE EXTRACTION (replace with your actual logic):
+    const extractedData = await page.extract({
+      instruction: "Find all items on this page and extract the specified fields for each one",
+      schema: ItemSchema  // ✅ CRITICAL: Use schema directly, NOT z.array(ItemSchema)
+    });
+    
+    // Stagehand automatically returns an array of objects matching your schema
+    if (extractedData && Array.isArray(extractedData)) {
+      results.push(...extractedData);
+    }
     
     // Add pagination logic if needed based on analysis results
     
@@ -195,7 +203,7 @@ export async function main(): Promise<any[]> {
     
     // Navigate to target URL
     await page.goto('TARGET_URL_HERE', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded', // Modern SPAs often have continuous network activity
       timeout: 30000
     });
     
@@ -281,7 +289,7 @@ export async function main(): Promise<any[]> {
     
     // Navigate and collect URLs using Playwright's reliable selectors
     await page.goto('TARGET_URL_HERE', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded', // Modern SPAs often have continuous network activity
       timeout: 30000
     });
     
@@ -321,7 +329,7 @@ export async function main(): Promise<any[]> {
       
       try {
         await stagehandPage.goto(url, {
-          waitUntil: 'networkidle',
+          waitUntil: 'domcontentloaded', // Modern SPAs often have continuous network activity
           timeout: 30000
         });
         
@@ -443,8 +451,8 @@ export async function main(): Promise<any[]> {
     
     // Navigate with random delays to mimic human behavior
     await page.goto('TARGET_URL_HERE', {
-      waitUntil: 'networkidle',
-      timeout: 60000 // Longer timeout for protected sites
+      waitUntil: 'domcontentloaded', // Don't wait for network idle on modern SPAs
+      timeout: 30000
     });
     
     // Random delay to mimic human reading time
