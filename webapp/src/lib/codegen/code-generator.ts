@@ -242,6 +242,9 @@ export async function main(): Promise<any[]> {
 - Use \`page.goto()\` for navigation
 - **CRITICAL: ALWAYS use FLAT Zod schemas in page.extract() - NO nested objects or arrays**
 - **MANDATORY: Start with website analysis before data extraction**
+- **IMPORTANT: For array schemas in page.extract(), DO NOT add .max() or .min() constraints.**
+- **IMPORTANT: The tool selection logic handles capacity planning - schemas should only validate data structure.**
+- **IMPORTANT: Example: z.array(ItemSchema) ✅   NOT: z.array(ItemSchema).max(25) ❌**
 
 **PLAYWRIGHT SPECIFIC RULES:**
 - ALWAYS use \`chromium.launch({ headless: false })\`
