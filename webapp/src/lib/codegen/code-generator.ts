@@ -315,6 +315,11 @@ ${siteSpec.output_fields.map((field: any) =>
 3. Follow the exact extraction strategy and tool choice specified
 4. Use the provided field mappings for data extraction
 5. DO NOT create your own selectors or guess - use exactly what is provided
+6. **ALWAYS clean and validate extracted text data:**
+   - Remove extra whitespace and newlines
+   - Truncate overly long text (company names should be < 100 chars)
+   - Split concatenated text if needed
+   - Validate data types before saving
 
 **EXAMPLE USAGE:**
 ${siteSpec.selectors.listing_items ? `

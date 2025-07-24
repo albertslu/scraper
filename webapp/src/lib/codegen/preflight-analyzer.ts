@@ -399,7 +399,95 @@ export class PreflightAnalyzer {
       tools: [{
         name: "generate_site_spec",
         description: "Generate a complete SiteSpec for scraping this website",
-        input_schema: SiteSpecSchema.omit({ analyzed_at: true, micro_test_results: true })
+        input_schema: {
+          type: "object",
+          properties: {
+            url: { type: "string", format: "uri" },
+            title: { type: "string" },
+            needs_js: { type: "boolean" },
+            has_infinite_scroll: { type: "boolean" },
+            captcha_suspected: { type: "boolean" },
+            has_apis: { type: "boolean" },
+            page_types: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["listing", "detail", "both"] },
+                  url_pattern: { type: "string" },
+                  description: { type: "string" }
+                },
+                required: ["type", "url_pattern", "description"]
+              }
+            },
+            selectors: {
+              type: "object",
+              properties: {
+                listing_items: { type: "string" },
+                detail_links: { type: "string" },
+                pagination: { type: "string" },
+                load_more: { type: "string" },
+                data_fields: { type: "object" }
+              }
+            },
+            output_fields: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  type: { type: "string" },
+                  required: { type: "boolean" },
+                  description: { type: "string" },
+                  extraction_method: { type: "string", enum: ["css_selector", "attribute", "api_endpoint", "computed"] },
+                  source_location: { type: "string" }
+                },
+                required: ["name", "type", "required", "description", "extraction_method", "source_location"]
+              }
+            },
+            pagination_strategy: {
+              type: "object",
+              properties: {
+                type: { type: "string", enum: ["none", "url_params", "button_click", "infinite_scroll", "api_pagination"] },
+                details: { type: "object" }
+              },
+              required: ["type", "details"]
+            },
+            wait_conditions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["selector", "network", "timeout", "javascript"] },
+                  value: { type: "string" },
+                  timeout_ms: { type: "number" }
+                },
+                required: ["type", "value"]
+              }
+            },
+            tool_choice: { type: "string", enum: ["stagehand", "playwright", "hybrid"] },
+            tool_reasoning: { type: "string" },
+            artifacts: {
+              type: "object",
+              properties: {
+                dom_digest: {
+                  type: "object",
+                  properties: {
+                    common_classes: { type: "array", items: { type: "string" } },
+                    common_ids: { type: "array", items: { type: "string" } },
+                    sample_items: { type: "array", items: { type: "string" } }
+                  },
+                  required: ["common_classes", "common_ids", "sample_items"]
+                },
+                network_summary: { type: "array" }
+              },
+              required: ["dom_digest", "network_summary"]
+            },
+            uncertainties: { type: "array", items: { type: "string" } },
+            warnings: { type: "array", items: { type: "string" } }
+          },
+          required: ["url", "title", "needs_js", "has_infinite_scroll", "captcha_suspected", "has_apis", "page_types", "selectors", "output_fields", "pagination_strategy", "wait_conditions", "tool_choice", "tool_reasoning", "artifacts", "uncertainties", "warnings"]
+        }
       }],
       tool_choice: { type: "tool", name: "generate_site_spec" }
     });

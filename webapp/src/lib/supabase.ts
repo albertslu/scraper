@@ -309,5 +309,15 @@ function generateDataHash(data: Record<string, any>): string {
       return result
     }, {} as Record<string, any>)
   
-  return btoa(JSON.stringify(sortedData)).slice(0, 32)
+  try {
+    // Use Buffer for proper Unicode handling instead of btoa()
+    const jsonString = JSON.stringify(sortedData)
+    const hash = Buffer.from(jsonString, 'utf8').toString('base64').slice(0, 32)
+    return hash
+  } catch (error) {
+    console.warn('Hash generation failed, using fallback:', error)
+    // Fallback: clean the data and try again
+    const cleanedData = JSON.stringify(sortedData).replace(/[^\x20-\x7E]/g, '') // Remove non-ASCII
+    return Buffer.from(cleanedData, 'utf8').toString('base64').slice(0, 32)
+  }
 } 
