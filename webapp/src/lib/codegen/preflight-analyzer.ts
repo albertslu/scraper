@@ -200,7 +200,7 @@ export class PreflightAnalyzer {
              selector += classStr;
              path.unshift(selector);
            }
-           current = current.parentElement;
+           current = current.parentElement as Element;
          }
          return path.join(' > ');
        }
@@ -755,7 +755,7 @@ export class PreflightAnalyzer {
     }
 
     const siteSpec = {
-      ...toolUse.input,
+      ...(toolUse.input as object),
       analyzed_at: new Date().toISOString()
     } as SiteSpec;
     
