@@ -3,7 +3,7 @@ import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
 import { createExecutionModule, ExecutionConfig } from './execution-module';
 
-import { createSelectorValidator, ValidationResult } from './selector-validator';
+import { createPreflightAnalyzer } from './preflight-analyzer';
 import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,7 +19,7 @@ export class CodegenOrchestrator {
   private refinementEngine = createRefinementEngine();
   private executionModule = createExecutionModule();
 
-  private selectorValidator = createSelectorValidator();
+  private preflightAnalyzer = createPreflightAnalyzer();
   private config: Required<OrchestratorConfig>;
 
   constructor(config: OrchestratorConfig = {}) {
@@ -63,30 +63,32 @@ export class CodegenOrchestrator {
       console.log(`📊 Complexity: ${requirements.complexity}`);
       console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Validate selectors on actual page
-      console.log('\n🧪 Step 2: Validating selectors on target page...');
+      // Step 2: Preflight Analysis - Comprehensive website analysis
+      console.log('\n🔍 Step 2: Running Preflight Analysis...');
       
-      let validationResult: ValidationResult | undefined;
+      let preflightResult;
       try {
-        validationResult = await this.selectorValidator.validateSelectorsForPage(
-          request.url,
-          `${requirements.target} - ${requirements.outputFields.map(f => f.name).join(', ')}`
-        );
-        console.log('✅ Selector validation completed successfully');
-        console.log(`📊 Page: ${validationResult.pageTitle}`);
-        console.log(`📊 Best listing selector: ${validationResult.recommendations.bestListingSelector || 'None'}`);
-        console.log(`📊 Best detail link selector: ${validationResult.recommendations.bestDetailLinkSelector || 'None'}`);
-        console.log(`📊 Strategy: ${validationResult.recommendations.extractionStrategy}`);
+        preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements);
+        console.log('✅ Preflight Analysis completed successfully');
+        console.log(`📊 Confidence: ${Math.round(preflightResult.confidence * 100)}%`);
+        console.log(`📊 Ready for codegen: ${preflightResult.ready_for_codegen ? 'Yes' : 'No'}`);
+        console.log(`📊 Tool choice: ${preflightResult.site_spec.tool_choice}`);
+        console.log(`📊 Listing selector: ${preflightResult.site_spec.selectors.listing_items || 'None'}`);
+        console.log(`📊 Micro-test: ${preflightResult.site_spec.micro_test_results?.success ? 'Passed' : 'Failed'}`);
+        
+        if (!preflightResult.ready_for_codegen) {
+          console.warn('⚠️ Preflight analysis indicates issues:', preflightResult.next_steps);
+        }
       } catch (error) {
-        console.warn('⚠️ Selector validation failed, proceeding without validation:', error);
-        validationResult = undefined;
+        console.warn('⚠️ Preflight analysis failed, proceeding with basic analysis:', error);
+        preflightResult = undefined;
       }
 
       // Step 3: Generate initial code with website analysis
       await this.updateJobStatus(job, 'generating');
       console.log('\n🔧 Step 3: Generating executable scraping code...');
       
-      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, validationResult);
+      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, preflightResult?.site_spec);
       job.script = currentScript;
       
       console.log('✅ Code generated successfully');

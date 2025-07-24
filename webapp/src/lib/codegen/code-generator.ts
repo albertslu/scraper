@@ -18,9 +18,9 @@ export class CodeGenerator {
   /**
    * Generate executable scraping code from parsed requirements
    */
-  async generateScript(requirements: ScrapingRequirements, url: string, validationResult?: any): Promise<GeneratedScript> {
+  async generateScript(requirements: ScrapingRequirements, url: string, siteSpec?: any): Promise<GeneratedScript> {
     const systemPrompt = this.getSystemPrompt();
-    const userPrompt = this.getUserPrompt(requirements, url, validationResult);
+    const userPrompt = this.getUserPrompt(requirements, url, siteSpec);
 
     try {
       // Debug: Log the actual prompt being sent to the AI
@@ -260,7 +260,7 @@ Analyze the target website and think about the optimal JSON schema and extractio
 Generate production-ready code that can be executed immediately without any modifications.`;
   }
 
-  private getUserPrompt(requirements: ScrapingRequirements, url: string, validationResult?: any): string {
+  private getUserPrompt(requirements: ScrapingRequirements, url: string, siteSpec?: any): string {
     const fieldsDescription = requirements.outputFields
       .map(field => `- ${field.name} (${field.type}): ${field.description} [${field.required ? 'Required' : 'Optional'}]`)
       .join('\n');
@@ -281,34 +281,49 @@ Generate production-ready code that can be executed immediately without any modi
 **Expected Output Fields:**
 ${fieldsDescription}
 
-${validationResult ? `
-**VALIDATED SELECTORS:**
-The target website has been tested and validated selectors are available:
+${siteSpec ? `
+**SITE SPECIFICATION:**
+Comprehensive website analysis completed with validated selectors and tested extraction methods:
 
-**Page:** ${validationResult.pageTitle}
-**URL:** ${validationResult.url}
+**Page:** ${siteSpec.title}
+**URL:** ${siteSpec.url}
+**Analysis Confidence:** ${siteSpec.micro_test_results?.success ? 'HIGH' : 'MEDIUM'} (Micro-test ${siteSpec.micro_test_results?.success ? 'PASSED' : 'FAILED'})
 
-**WORKING SELECTORS:**
-${validationResult.recommendations.bestListingSelector ? `- Best Listing Selector: "${validationResult.recommendations.bestListingSelector}"` : '- No reliable listing selector found'}
-${validationResult.recommendations.bestDetailLinkSelector ? `- Best Detail Link Selector: "${validationResult.recommendations.bestDetailLinkSelector}"` : '- No reliable detail link selector found'}
-${validationResult.recommendations.bestPaginationSelector ? `- Best Pagination Selector: "${validationResult.recommendations.bestPaginationSelector}"` : '- No pagination selector found'}
+**VALIDATED SELECTORS (TESTED ON LIVE SITE):**
+${siteSpec.selectors.listing_items ? `- Listing Items: "${siteSpec.selectors.listing_items}" ✅ TESTED` : '- No listing items selector found'}
+${siteSpec.selectors.detail_links ? `- Detail Links: "${siteSpec.selectors.detail_links}" ✅ TESTED` : '- No detail links selector found'}
+${siteSpec.selectors.pagination ? `- Pagination: "${siteSpec.selectors.pagination}" ✅ TESTED` : '- No pagination selector found'}
+${siteSpec.selectors.load_more ? `- Load More: "${siteSpec.selectors.load_more}" ✅ TESTED` : ''}
 
-**Extraction Strategy:** ${validationResult.recommendations.extractionStrategy}
+**EXTRACTION STRATEGY:** ${siteSpec.pagination_strategy.type}
+**TOOL CHOICE:** ${siteSpec.tool_choice} (${siteSpec.tool_reasoning})
+
+**FIELD MAPPINGS:**
+${siteSpec.output_fields.map((field: any) => 
+  `- ${field.name} (${field.type}): Extract via ${field.extraction_method} from "${field.source_location}"`
+).join('\n')}
+
+**SITE TECHNICAL DETAILS:**
+- Requires JavaScript: ${siteSpec.needs_js ? 'Yes' : 'No'}
+- Has APIs: ${siteSpec.has_apis ? 'Yes' : 'No'}
+- Pagination Type: ${siteSpec.pagination_strategy.type}
+- CAPTCHA Risk: ${siteSpec.captcha_suspected ? 'HIGH' : 'LOW'}
 
 **CRITICAL INSTRUCTIONS:**
-1. You MUST use ONLY the validated selectors listed above
-2. These selectors have been tested on the actual page and are guaranteed to work
-3. DO NOT create your own selectors or guess - use exactly what is provided
-4. If a selector is not listed, that functionality is not available on this page
+1. You MUST use ONLY the validated selectors and field mappings listed above
+2. These selectors have been tested on the actual page with micro-testing and are guaranteed to work
+3. Follow the exact extraction strategy and tool choice specified
+4. Use the provided field mappings for data extraction
+5. DO NOT create your own selectors or guess - use exactly what is provided
 
 **EXAMPLE USAGE:**
-${validationResult.recommendations.bestListingSelector ? `
+${siteSpec.selectors.listing_items ? `
 // Use the validated listing selector:
-const items = await page.$$('${validationResult.recommendations.bestListingSelector}');
+const items = await page.$$('${siteSpec.selectors.listing_items}');
 ` : ''}
-${validationResult.recommendations.bestDetailLinkSelector ? `
+${siteSpec.selectors.detail_links ? `
 // Use the validated detail link selector:
-const detailLinks = await page.$$('${validationResult.recommendations.bestDetailLinkSelector}');
+const detailLinks = await page.$$('${siteSpec.selectors.detail_links}');
 ` : ''}
 ` : ''}
 
