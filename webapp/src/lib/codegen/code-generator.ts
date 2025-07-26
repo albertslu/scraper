@@ -248,7 +248,7 @@ export async function main(): Promise<any[]> {
 - ALWAYS call \`await stagehand.close()\` in finally block
 - Use \`page.extract()\` for data extraction with natural language instructions
 - Use \`page.act()\` for interactions
-- Use \`page.goto()\` for navigation
+- **CRITICAL: Use \`page.goto(url, { waitUntil: 'domcontentloaded' })\` - NEVER use 'networkidle2' or 'networkidle0'**
 - **CRITICAL: ALWAYS use FLAT Zod schemas in page.extract() - NO nested objects or arrays**
 - **MANDATORY: Start with website analysis before data extraction**
 - **IMPORTANT: For array schemas in page.extract(), DO NOT add .max() or .min() constraints.**
@@ -506,148 +506,30 @@ Generate production-ready code that can be executed immediately without any modi
 **Target Data:** ${requirements.target}
 **Tool Recommendation:** ${requirements.toolRecommendation}
 **Complexity:** ${requirements.complexity}
-**Reasoning:** ${requirements.reasoning}
 
 **Scope:**
-- Pages: ${requirements.scope.pages || 'Not specified'}
+- Pages: ${requirements.scope.pages || 'Not specified'}  
 - Limit: ${requirements.scope.limit || 'No limit'}
 - Filters: ${requirements.scope.filters?.join(', ') || 'None'}
 
 **Expected Output Fields:**
 ${fieldsDescription}
 
-${siteSpec ? `
-**SITE SPECIFICATION:**
-Comprehensive website analysis completed with validated selectors and tested extraction methods:
-
-**Page:** ${siteSpec.title}
-**URL:** ${siteSpec.url}
-**Analysis Confidence:** ${siteSpec.micro_test_results?.success ? 'HIGH' : 'MEDIUM'} (Micro-test ${siteSpec.micro_test_results?.success ? 'PASSED' : 'FAILED'})
-
-**VALIDATED SELECTORS (TESTED ON LIVE SITE):**
-${siteSpec.selectors.listing_items ? `- Listing Items: "${siteSpec.selectors.listing_items}" ✅ TESTED` : '- No listing items selector found'}
-${siteSpec.selectors.detail_links ? `- Detail Links: "${siteSpec.selectors.detail_links}" ✅ TESTED` : '- No detail links selector found'}
-${siteSpec.selectors.pagination ? `- Pagination: "${siteSpec.selectors.pagination}" ✅ TESTED` : '- No pagination selector found'}
-${siteSpec.selectors.load_more ? `- Load More: "${siteSpec.selectors.load_more}" ✅ TESTED` : ''}
-
-**EXTRACTION STRATEGY:** ${siteSpec.pagination_strategy.type}
-**TOOL CHOICE:** ${siteSpec.tool_choice} (${siteSpec.tool_reasoning})
-
-**FIELD MAPPINGS:**
-${siteSpec.output_fields.map((field: any) => 
-  `- ${field.name} (${field.type}): Extract via ${field.extraction_method} from "${field.source_location}"`
-).join('\n')}
-
-**SITE TECHNICAL DETAILS:**
-- Requires JavaScript: ${siteSpec.needs_js ? 'Yes' : 'No'}
-- Has APIs: ${siteSpec.has_apis ? 'Yes' : 'No'}
-- Pagination Type: ${siteSpec.pagination_strategy.type}
-- CAPTCHA Risk: ${siteSpec.captcha_suspected ? 'HIGH' : 'LOW'}
-- Anti-Bot Protection: ${siteSpec.protection_detected ? `YES (${siteSpec.protection_type})` : 'NO'}
-${siteSpec.protection_detected ? '🛡️ **PROTECTION DETECTED**: Use stealth mode appropriate for the chosen tool:\n  - Stagehand: Use BrowserBase env with stealth + CAPTCHA solving\n  - Playwright: Use stealth browser args and anti-detection scripts' : ''}
-
-**IMPORTANT NOTE FOR MULTI-PAGE SCRAPING:**
-${siteSpec.micro_test_results?.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This is NORMAL for multi-page scraping tasks. The listing selectors are VALID and TESTED. Generate FULL PRODUCTION CODE, not a limited test version.'}
-
-**CRITICAL INSTRUCTIONS:**
-1. You MUST use ONLY the validated selectors and field mappings listed above
-2. These selectors have been tested on the actual page with micro-testing and are guaranteed to work
-3. Follow the exact extraction strategy and tool choice specified
-4. Use the provided field mappings for data extraction
-5. DO NOT create your own selectors or guess - use exactly what is provided
-6. **ALWAYS clean and validate extracted text data:**
-   - Remove extra whitespace and newlines
-   - Truncate overly long text (company names should be < 100 chars)
-   - Split concatenated text if needed
-   - Validate data types before saving
-7. **FOR MULTI-PAGE SCRAPING:** If micro-test failed but listing selectors work, generate FULL PRODUCTION CODE. Micro-test failures are expected when detail fields come from individual pages.
-
-**EXAMPLE USAGE:**
-${siteSpec.selectors.listing_items ? `
-// Use the validated listing selector:
-const items = await page.$$('${siteSpec.selectors.listing_items}');
-` : ''}
-${siteSpec.selectors.detail_links ? `
-// Use the validated detail link selector:
-const detailLinks = await page.$$('${siteSpec.selectors.detail_links}');
-` : ''}
-` : ''}
-
-
-**HYBRID APPROACH EXAMPLE (when tool recommendation is 'hybrid'):**
-
-For a job board scraping task requiring visiting individual job detail pages:
-
-\`\`\`typescript
-// PHASE 1: Playwright collects all job URLs from listing pages
-const jobUrls = [];
-let currentPage = 1;
-while (currentPage <= 5) { // Limit to prevent infinite loops
-  await page.goto(\`https://example-jobs.com/page/\${currentPage}\`);
-  const pageUrls = await page.$$eval('a.job-link', links => 
-    links.map(link => link.href)
-  );
-  jobUrls.push(...pageUrls);
-  currentPage++;
-}
-
-// PHASE 2: Stagehand extracts detailed content from each job page
-for (const jobUrl of jobUrls.slice(0, 20)) { // Limit for time management
-  await stagehandPage.goto(jobUrl);
-  const jobData = await stagehandPage.extract({
-    instruction: "Extract job details including title, company, salary, description, and requirements",
-    schema: JobSchema
-  });
-  results.push(jobData);
-}
-\`\`\`
-
-This approach combines Playwright's reliable pagination with Stagehand's intelligent content extraction.
+**Canvas Approach Instructions:**
+This code will be tested on a small sample first. Focus on:
+1. Creating working extraction logic for the target data
+2. Using appropriate selectors for the tool type (${requirements.toolRecommendation})
+3. Handling basic pagination if scope indicates multiple pages
+4. Robust error handling - the Canvas test will catch issues
 
 **Requirements:**
 1. Generate both test code (single sample) and full code (complete scraping)
-2. Use ${requirements.toolRecommendation} as the primary approach${siteSpec && siteSpec.protection_detected ? ' **with stealth mode enabled due to protection**' : ''}
-3. Handle the specified complexity level (${requirements.complexity})
-4. Return data matching the exact field schema above
-5. Include appropriate error handling and rate limiting
-6. Add progress logging and debugging information
-7. **For large datasets (>20 items): Include periodic result output every 10-20 items to handle potential timeouts**
-${siteSpec && siteSpec.protection_detected ? '\n8. **CRITICAL**: Enable anti-detection features for the chosen tool due to protection detected' : ''}
+2. Use ${requirements.toolRecommendation} as the primary approach
+3. Return data matching the exact field schema above  
+4. Include appropriate error handling and progress logging
+5. **Canvas will test and refine this code** - focus on working logic over perfect selectors
 
-**PERIODIC RESULT OUTPUT AND TIME MANAGEMENT:**
-For large scraping jobs, include time checks and partial results:
-\`\`\`typescript
-// Check time limit before processing each item
-if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-  console.log(\`⏰ Approaching 4.5min limit, stopping early with \${results.length} items\`);
-  break;
-}
-
-// Output partial results every 10-15 items
-if (results.length > 0 && results.length % 15 === 0) {
-  console.log('=== PARTIAL_RESULTS_START ===');
-  console.log(JSON.stringify({
-    success: true,
-    data: results,
-    totalFound: results.length,
-    isPartial: true,
-    executionTime: Date.now() - startTime
-  }, null, 2));
-  console.log('=== PARTIAL_RESULTS_END ===');
-}
-\`\`\`
-
-**CRITICAL Code Structure Requirements:**
-- MUST export a function named exactly 'main' with signature: 'export async function main(): Promise<any[]>'
-- Test code should validate the approach on minimal data (limit to first page/few items)
-- Full code should handle pagination but LIMIT to reasonable amounts (max 3-5 pages or 100-200 items)
-- The 'main' function should handle all setup, scraping, and cleanup internally
-- Return results as an array of objects matching the schema
-- Use modern TypeScript with proper typing
-- Do NOT include require.main === module blocks or other execution patterns
-- IMPORTANT: Add proper exit conditions to prevent infinite loops and timeouts
-
-Generate executable, production-ready code that can be run immediately.`;
+Generate production-ready code that can be tested and refined through the Canvas process.`;
   }
 }
 

@@ -26,7 +26,8 @@ export class ExecutionModule {
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
       sandboxDir: config.sandboxDir || './sandbox',
-      testMode: config.testMode || false
+      testMode: config.testMode || false,
+      retryContext: config.retryContext || null
     };
     
     this.tempDir = this.config.sandboxDir;
@@ -286,7 +287,9 @@ executeScript().catch(error => {
    * Parse execution output to extract structured results
    */
   private parseExecutionOutput(stdout: string, outputFormat: string): {
+    success: boolean;
     data: any[];
+    errors: string[];
     csvOutput?: string;
   } {
     try {
@@ -302,12 +305,11 @@ executeScript().catch(error => {
         console.log('🔍 Parsing final JSON result:', jsonStr.length, 'characters');
         const results = JSON.parse(jsonStr);
         
-        if (!results.success) {
-          throw new Error(`Execution failed: ${results.errors?.join('; ')}`);
-        }
-        
+        // Return the results even if execution failed - let orchestrator handle it
         return {
+          success: results.success || false,
           data: results.data || [],
+          errors: results.errors || [],
           csvOutput: outputFormat === 'csv' || outputFormat === 'both' ? 
             this.generateCSV(results.data || []) : undefined
         };
@@ -336,7 +338,9 @@ executeScript().catch(error => {
           const results = JSON.parse(jsonStr);
           
           return {
+            success: results.success || false,
             data: results.data || [],
+            errors: results.errors || [],
             csvOutput: outputFormat === 'csv' || outputFormat === 'both' ? 
               this.generateCSV(results.data || []) : undefined
           };
@@ -345,11 +349,11 @@ executeScript().catch(error => {
       
       console.warn('⚠️ No structured results found in output');
       console.warn('Stdout length:', stdout.length);
-      return { data: [] };
+      return { success: false, data: [], errors: ['No structured results found in output'] };
       
     } catch (error) {
       console.error('⚠️ Failed to parse execution output:', error);
-      return { data: [] };
+      return { success: false, data: [], errors: [`Failed to parse execution output: ${error}`] };
     }
   }
 

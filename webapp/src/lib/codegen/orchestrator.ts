@@ -2,15 +2,15 @@ import { createPromptParser } from './prompt-parser';
 import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
 import { createExecutionModule, ExecutionConfig } from './execution-module';
-
 import { createPreflightAnalyzer } from './preflight-analyzer';
-import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
+import { ScrapingRequest, CodegenJob, GeneratedScript, TestResult } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface OrchestratorConfig {
   maxRefinementAttempts?: number;
   testTimeout?: number;
   tempDir?: string;
+  testSampleSize?: number; // How many items to test on
 }
 
 export class CodegenOrchestrator {
@@ -18,20 +18,20 @@ export class CodegenOrchestrator {
   private codeGenerator = createCodeGenerator();
   private refinementEngine = createRefinementEngine();
   private executionModule = createExecutionModule();
-
   private preflightAnalyzer = createPreflightAnalyzer();
   private config: Required<OrchestratorConfig>;
 
   constructor(config: OrchestratorConfig = {}) {
     this.config = {
-      maxRefinementAttempts: config.maxRefinementAttempts || 3,
+      maxRefinementAttempts: config.maxRefinementAttempts || 1,
       testTimeout: config.testTimeout || 60000,
-      tempDir: config.tempDir || './temp'
+      tempDir: config.tempDir || './temp',
+      testSampleSize: config.testSampleSize || 3
     };
   }
 
   /**
-   * Execute the complete CodeGen pipeline: Prompt → Code → Refine → Ready for Execution
+   * Execute the complete Canvas CodeGen pipeline: Prompt → Code → Test → Refine → Ready for Execution
    */
   async executeCodegenPipeline(request: ScrapingRequest): Promise<CodegenJob> {
     const job: CodegenJob = {
@@ -45,7 +45,7 @@ export class CodegenOrchestrator {
     };
 
     try {
-      console.log('🚀 Starting LLM CodeGen Pipeline...\n');
+      console.log('🚀 Starting Canvas CodeGen Pipeline...\n');
       
       // Step 1: Parse the prompt
       await this.updateJobStatus(job, 'parsing');
@@ -60,76 +60,49 @@ export class CodegenOrchestrator {
       console.log('✅ Prompt parsed successfully');
       console.log(`🎯 Target: ${requirements.target}`);
       console.log(`🔧 Tool: ${requirements.toolRecommendation}`);
-      console.log(`📊 Complexity: ${requirements.complexity}`);
-      console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Preflight Analysis - Comprehensive website analysis
-      console.log('\n🔍 Step 2: Running Preflight Analysis...');
+      // Step 2: Skip slow site analysis - Canvas will handle validation through testing
+      console.log('\n⏭️ Step 2: Skipping site analysis - Canvas will validate through testing...');
       
-      let preflightResult;
-      try {
-        preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements, request.retryContext);
-        console.log('✅ Preflight Analysis completed successfully');
-        console.log(`📊 Confidence: ${Math.round(preflightResult.confidence * 100)}%`);
-        console.log(`📊 Ready for codegen: ${preflightResult.ready_for_codegen ? 'Yes' : 'No'}`);
-        console.log(`📊 Tool choice: ${preflightResult.site_spec.tool_choice}`);
-        console.log(`📊 Listing selector: ${preflightResult.site_spec.selectors.listing_items || 'None'}`);
-        console.log(`📊 Micro-test: ${preflightResult.site_spec.micro_test_results?.success ? 'Passed' : 'Failed'}`);
-        
-        if (!preflightResult.ready_for_codegen) {
-          console.warn('⚠️ Preflight analysis indicates issues:', preflightResult.next_steps);
-          
-          // Override for multi-page scenarios where listing selectors work
-          if (preflightResult.site_spec.selectors.listing_items && 
-              preflightResult.site_spec.micro_test_results && 
-              preflightResult.site_spec.micro_test_results.items_extracted > 0) {
-            console.log('🔧 Overriding low confidence - listing selectors work, proceeding with full codegen');
-            preflightResult.ready_for_codegen = true;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ Preflight analysis failed, proceeding with basic analysis:', error);
-        preflightResult = undefined;
-      }
-
-      // Step 3: Generate initial code with website analysis
-      await this.updateJobStatus(job, 'generating');
-      console.log('\n🔧 Step 3: Generating executable scraping code...');
-      
-      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, preflightResult?.site_spec);
-      job.script = currentScript;
-      
-      console.log('✅ Code generated successfully');
-      console.log(`📝 Script ID: ${currentScript.id}`);
-      console.log(`🛠️ Dependencies: ${currentScript.dependencies?.join(', ') || 'None'}`);
-
-      // Step 3: Code is ready for execution
-      await this.updateJobStatus(job, 'completed');
-      console.log('\n✅ Step 3: Code generation completed successfully!');
-
-      console.log('\n🎉 CodeGen Pipeline Completed Successfully!');
-      console.log(`✅ Script ready for execution`);
-      console.log(`📝 Script ID: ${currentScript.id}`);
-      console.log(`🛠️ Tool: ${currentScript.toolType}`);
-      console.log(`📦 Dependencies: ${currentScript.dependencies?.join(', ') || 'None'}`);
-
-      job.executionResult = {
-        success: true,
-        data: [],
-        totalFound: 0,
-        errors: [],
-        executionTime: 0, // Would be set during actual execution
-        metadata: {
-          pages: job.requirements?.scope.pages || 1,
-          itemsPerPage: 0,
-          toolUsed: job.requirements?.toolRecommendation || 'unknown'
-        }
+      // Create minimal site context for code generation
+      const siteSpec = {
+        url: request.url,
+        title: 'Canvas Generation',
+        tool_choice: requirements.toolRecommendation,
+        selectors: {}, // Let LLM figure this out
+        output_fields: requirements.outputFields.map(field => ({
+          name: field.name,
+          type: field.type,
+          required: field.required,
+          description: field.description,
+          extraction_method: 'css_selector',
+          source_location: 'TBD' // LLM will determine
+        }))
       };
+
+      // Step 3: Generate initial code
+      await this.updateJobStatus(job, 'generating');
+      console.log('\n🔧 Step 3: Generating scraping code...');
+      
+      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, siteSpec);
+      job.script = currentScript;
+      job.iterations = 1;
+      
+      console.log('✅ Code generated');
+
+      // Step 4: Canvas Test → Question → Refine Loop
+      const finalScript = await this.canvasTestLoop(job, currentScript);
+      job.script = finalScript;
+
+      // Step 5: Ready for execution
+      await this.updateJobStatus(job, 'completed');
+      console.log('\n🎉 Canvas Pipeline Complete!');
+      console.log(`✅ Script ready for execution`);
 
       return job;
 
     } catch (error) {
-      console.error('💥 Pipeline failed with error:', error);
+      console.error('💥 Canvas Pipeline failed:', error);
       await this.updateJobStatus(job, 'failed');
       throw error;
     }
@@ -222,6 +195,101 @@ export class CodegenOrchestrator {
     job.status = status;
     job.updatedAt = new Date();
     // In a real implementation, you would persist this to a database
+  }
+
+  /**
+   * Canvas Core Loop: Test → Ask Question → Refine (if test fails)
+   */
+  private async canvasTestLoop(job: CodegenJob, initialScript: GeneratedScript): Promise<GeneratedScript> {
+    let currentScript = initialScript;
+    
+    while (job.iterations <= this.config.maxRefinementAttempts) {
+      console.log(`\n🧪 Canvas Test ${job.iterations}:`);
+      
+      // Test the script
+      await this.updateJobStatus(job, 'testing');
+      const testResult = await this.testScript(currentScript);
+      
+      // If test passed, we're done!
+      if (testResult.success && !testResult.needsRefinement) {
+        console.log('✅ Test PASSED! Script ready.');
+        currentScript.testResult = testResult;
+        return currentScript;
+      }
+      
+      // Test failed - ask user a question immediately
+      console.log('❌ Test FAILED - asking user for guidance...');
+      
+      const questions = await this.refinementEngine.generateClarifyingQuestions(
+        job.requirements!,
+        testResult.errors || ['Test execution failed'],
+        job.request.url
+      );
+      
+      // Store the question in the test result for UI to display
+      testResult.clarificationNeeded = {
+        question: questions.questions[0]?.question || "The scraping approach needs adjustment. Can you provide guidance?",
+        options: questions.questions[0]?.options,
+        context: `Test failed: ${testResult.errors?.join('; ') || 'Unknown error'}`
+      };
+      
+      currentScript.testResult = testResult;
+      
+      // In a real implementation, we'd wait for user response here
+      // For now, we'll auto-refine for testing
+      console.log(`❓ Would ask user: "${testResult.clarificationNeeded.question}"`);
+      console.log('🔧 Auto-refining for now...');
+      
+      // Refine the script
+      await this.updateJobStatus(job, 'refining');
+      const refinementContext: RefinementContext = {
+        originalScript: currentScript,
+        testResult,
+        userFeedback: 'Auto-refinement based on test failure'
+      };
+      
+      currentScript = await this.refinementEngine.refineScript(refinementContext);
+      job.iterations++;
+      
+      console.log(`📝 Refined to version ${currentScript.version}`);
+    }
+    
+    // If we hit max attempts, return with question for user
+    console.log(`🚫 Max attempts reached - needs user input`);
+    return currentScript;
+  }
+
+  /**
+   * Simple test execution - no fallbacks, just pass/fail
+   */
+  private async testScript(script: GeneratedScript): Promise<TestResult> {
+    try {
+      const executionResult = await this.executionModule.executeScript(script, {
+        testMode: true,
+        timeout: this.config.testTimeout,
+        outputFormat: 'json',
+        maxItems: this.config.testSampleSize
+      });
+      
+      return {
+        success: executionResult.success && executionResult.data.length > 0,
+        sampleData: executionResult.data.slice(0, this.config.testSampleSize),
+        errors: executionResult.errors,
+        warnings: [],
+        suggestions: [],
+        needsRefinement: !executionResult.success || executionResult.data.length === 0
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        sampleData: [],
+        errors: [`Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        warnings: [],
+        suggestions: [],
+        needsRefinement: true
+      };
+    }
   }
 }
 

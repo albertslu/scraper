@@ -53,6 +53,7 @@ export interface GeneratedScript {
   explanation?: string; // Explanation of the approach
   dependencies?: string[]; // Required npm packages
   changes?: string[]; // List of changes made during refinement
+  testResult?: TestResult; // Canvas test results
 }
 
 // Test execution result
@@ -96,7 +97,7 @@ export interface CodegenJob {
   script?: GeneratedScript;
   testResult?: TestResult;
   executionResult?: ExecutionResult;
-  status: 'parsing' | 'generating' | 'refining' | 'executing' | 'completed' | 'failed';
+  status: 'parsing' | 'analyzing' | 'generating' | 'testing' | 'refining' | 'executing' | 'completed' | 'failed';
   iterations: number;
   createdAt: Date;
   updatedAt: Date;
