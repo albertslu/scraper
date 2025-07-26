@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // Format the response with job details and output schema
+    // Format the response with job details, output schema, and generated code
     const response = {
       job: {
         id: result.job.id,
@@ -33,7 +33,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         status: result.job.status,
         total_items: result.job.total_items || result.job.total_companies, // Fallback for legacy
         job_type: result.script ? 'flexible' : 'legacy',
-        output_schema: result.script?.output_schema
+        output_schema: result.script?.output_schema,
+        // Include generated code and script details
+        generated_code: result.script?.generated_code,
+        tool_type: result.script?.tool_type,
+        explanation: result.script?.explanation,
+        dependencies: result.script?.dependencies,
+        script_id: result.script?.id,
+        script_version: result.script?.version
       }
     }
 

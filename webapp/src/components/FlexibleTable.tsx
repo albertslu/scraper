@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, ExternalLink, Phone, MapPin, User, Award, Calendar, Hash, Eye, Download, RefreshCw, AlertCircle, TrendingUp } from 'lucide-react'
+import { Search, ExternalLink, Phone, MapPin, User, Award, Calendar, Hash, Eye, Download, RefreshCw, AlertCircle, TrendingUp, Code, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface FlexibleTableProps {
   jobId: string
@@ -32,6 +32,13 @@ interface JobDetails {
   output_schema?: TableColumn[]
   job_type: 'legacy' | 'flexible'
   expected_items?: number // Add this to track what user originally requested
+  // Generated code fields
+  generated_code?: string
+  tool_type?: string
+  explanation?: string
+  dependencies?: string[]
+  script_id?: string
+  script_version?: number
 }
 
 export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
@@ -42,6 +49,7 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredData, setFilteredData] = useState<TableData[]>([])
   const [isRetrying, setIsRetrying] = useState(false)
+  const [showCode, setShowCode] = useState(false)
 
   useEffect(() => {
     if (jobId) {
@@ -198,9 +206,9 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
   const getColumns = (): TableColumn[] => {
     if (jobDetails?.output_schema) {
       // Transform job schema format to table column format
-      return jobDetails.output_schema.map(field => ({
+      return jobDetails.output_schema.map((field: any) => ({
         key: field.name,
-        label: field.name.split('_').map(word => 
+        label: field.name.split('_').map((word: string) => 
           word.charAt(0).toUpperCase() + word.slice(1)
         ).join(' '),
         type: field.type,
@@ -426,6 +434,68 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
               <p className="mt-2 text-sm text-gray-600">
                 {jobDetails.prompt}
               </p>
+            )}
+            
+            {/* Generated Code Section */}
+            {jobDetails.generated_code && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowCode(!showCode)}
+                  className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  <Code className="w-4 h-4 mr-2" />
+                  {showCode ? 'Hide' : 'View'} Generated Code
+                  {showCode ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                </button>
+                
+                {showCode && (
+                  <div className="mt-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-gray-900 flex items-center">
+                          <Code className="w-4 h-4 mr-2" />
+                          Generated Scraper Code
+                        </h3>
+                        <div className="flex items-center space-x-3 text-xs text-gray-500">
+                          {jobDetails.tool_type && (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {jobDetails.tool_type}
+                            </span>
+                          )}
+                          {jobDetails.script_version && (
+                            <span>v{jobDetails.script_version}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
+                        <code>{jobDetails.generated_code}</code>
+                      </pre>
+                      
+                      {jobDetails.explanation && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                          <h4 className="text-sm font-medium text-blue-800 mb-2">📝 Explanation</h4>
+                          <p className="text-sm text-blue-700">{jobDetails.explanation}</p>
+                        </div>
+                      )}
+                      
+                      {jobDetails.dependencies && jobDetails.dependencies.length > 0 && (
+                        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                          <h4 className="text-sm font-medium text-yellow-800 mb-2">📦 Dependencies</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {jobDetails.dependencies.map((dep, index) => (
+                              <span key={index} className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                {dep}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           

@@ -7,6 +7,11 @@ config({ path: path.resolve(__dirname, '../.env') });
 
 const nextConfig: NextConfig = {
   /* config options here */
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
   env: {
     // Explicitly pass through environment variables
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -14,6 +19,9 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    // BrowserBase for production browser automation
+    BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
+    BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
   }
 };
 

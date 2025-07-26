@@ -140,7 +140,7 @@ export const db = {
 
   async updateScrapingJob(
     id: string, 
-    updates: Partial<Pick<ScrapingJob, 'status' | 'completed_at' | 'total_companies' | 'total_items' | 'execution_time' | 'errors' | 'title'>>
+    updates: Partial<Pick<ScrapingJob, 'status' | 'completed_at' | 'total_companies' | 'total_items' | 'execution_time' | 'errors' | 'title' | 'script_id'>>
   ): Promise<ScrapingJob> {
     const { data, error } = await supabase
       .from('scraping_jobs')
