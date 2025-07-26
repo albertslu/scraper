@@ -93,6 +93,8 @@ export class CodeGenerator {
   private getSystemPrompt(): string {
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code for web scraping based on structured requirements.
 
+CORE PRINCIPLE: **MAXIMIZE DATA EXTRACTION** - Generate persistent, aggressive code that finds all available content rather than stopping prematurely.
+
 TOOL-SPECIFIC CODE GENERATION:
 
 **For Stagehand (LLM-powered):**
@@ -100,17 +102,20 @@ TOOL-SPECIFIC CODE GENERATION:
 - Leverage page.act() for interactions and page.extract() for data
 - Handle dynamic content and anti-bot protection gracefully
 - Use descriptive selectors that the LLM can understand
+- **Be persistent** with AI actions - retry with different phrasing if first attempt fails
 
 **For Playwright (Traditional):**
 - Use specific CSS selectors and DOM queries  
 - Handle pagination with explicit waits and loops
 - Optimize for performance with parallel processing where possible
 - Include robust error handling for network issues
+- **Implement multiple pagination strategies** - never rely on just one method
 
 **For Hybrid:**
 - Use Stagehand for complex navigation, authentication, or dynamic content
 - Switch to Playwright for bulk data extraction once content is loaded
 - Clearly separate the two approaches in the code
+- **Combine persistence of both tools** for maximum success rate
 
 PARALLEL WORKER ARCHITECTURE:
 
@@ -255,11 +260,71 @@ ${fieldsDescription}
 6. Add progress logging and debugging information
 7. **For large datasets (>5 pages or >50 items): Use parallel browser contexts** for better performance and timeout prevention
 
+**CRITICAL: Aggressive Pagination & Continuation Strategy**
+The generated code MUST be persistent about finding more content. Implement multiple fallback strategies:
+
+**Pagination Strategy (try ALL of these):**
+1. **Next Page Buttons**: Look for "Next", "→", "More", pagination numbers
+2. **Infinite Scroll**: Scroll to bottom, wait for content, repeat  
+3. **Load More Buttons**: Click "Load More", "Show More", "View All"
+4. **URL Pattern Pagination**: Increment page numbers in URL (?page=1, ?page=2, etc.)
+
+**Stopping Conditions (be conservative about stopping):**
+- Only stop after **3-5 consecutive failed attempts** to find new content
+- Try **multiple pagination methods** before giving up on a page
+- If one method fails, immediately try the next method
+- **Never stop after just 1 failed attempt**
+
+**Error Recovery:**
+- If pagination navigation fails, retry with different selectors
+- If extraction returns 0 items, wait and retry (might be loading)
+- Log all attempts and methods tried before stopping
+
+**Example Implementation Pattern:**
+\`\`\`typescript
+// Multiple pagination strategies - keep trying until exhausted
+for (let attempt = 1; attempt <= 5; attempt++) {
+  let foundNewContent = false;
+  
+  // Strategy 1: Next button
+  try {
+    await page.click('button:has-text("Next"), a:has-text("Next"), [aria-label="Next"]');
+    await page.waitForTimeout(2000);
+    foundNewContent = true;
+  } catch {}
+  
+  // Strategy 2: Infinite scroll
+  if (!foundNewContent) {
+    try {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(3000);
+      foundNewContent = await checkForNewContent();
+    } catch {}
+  }
+  
+  // Strategy 3: Load more button
+  if (!foundNewContent) {
+    try {
+      await page.click('button:has-text("Load"), button:has-text("More"), .load-more');
+      await page.waitForTimeout(2000);
+      foundNewContent = true;
+    } catch {}
+  }
+  
+  // Only stop if NO strategies worked after multiple attempts
+  if (!foundNewContent && attempt >= 3) {
+    console.log(\`🛑 Exhausted all pagination strategies after \${attempt} attempts\`);
+    break;
+  }
+}
+\`\`\`
+
 **Code Structure:**
 - Test code should validate the approach on minimal data
 - Full code should handle pagination, retries, and complete data extraction
 - Both should export a main function that returns the scraped data
 - Use modern TypeScript with proper typing
+- **Prioritize completeness over speed** - better to get all data slowly than partial data quickly
 
 Generate executable, production-ready code that can be run immediately.`;
   }
