@@ -2,6 +2,7 @@ import { createPromptParser } from './prompt-parser';
 import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
 import { createExecutionModule, ExecutionConfig } from './execution-module';
+import { createPreflightAnalyzer } from './preflight-analyzer';
 import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,6 +17,7 @@ export class CodegenOrchestrator {
   private codeGenerator = createCodeGenerator();
   private refinementEngine = createRefinementEngine();
   private executionModule = createExecutionModule();
+  private preflightAnalyzer = createPreflightAnalyzer();
   private config: Required<OrchestratorConfig>;
 
   constructor(config: OrchestratorConfig = {}) {
@@ -59,20 +61,39 @@ export class CodegenOrchestrator {
       console.log(`📊 Complexity: ${requirements.complexity}`);
       console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Generate initial code
-      await this.updateJobStatus(job, 'generating');
-      console.log('\n🔧 Step 2: Generating executable scraping code...');
+      // Step 2: Preflight Analysis - Analyze the actual site
+      await this.updateJobStatus(job, 'analyzing');
+      console.log('\n🔍 Step 2: Running preflight analysis...');
       
-      let currentScript = await this.codeGenerator.generateScript(requirements, request.url);
+      const preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements);
+      const siteSpec = preflightResult.site_spec;
+      
+      console.log('✅ Preflight analysis completed');
+      console.log(`🎯 Site Analysis Confidence: ${(preflightResult.confidence * 100).toFixed(1)}%`);
+      console.log(`🛠️ Recommended Tool: ${siteSpec.tool_choice}`);
+      console.log(`🔍 Selectors Found: ${Object.keys(siteSpec.selectors).length}`);
+      console.log(`🧪 Micro-test: ${siteSpec.micro_test_results?.success ? 'PASSED' : 'FAILED'}`);
+      
+      // Override tool recommendation if preflight analysis suggests different approach
+      if (siteSpec.tool_choice !== requirements.toolRecommendation) {
+        console.log(`🔄 Tool override: ${requirements.toolRecommendation} → ${siteSpec.tool_choice} (based on site analysis)`);
+        requirements.toolRecommendation = siteSpec.tool_choice;
+      }
+
+      // Step 3: Generate initial code with site context
+      await this.updateJobStatus(job, 'generating');
+      console.log('\n🔧 Step 3: Generating site-specific scraping code...');
+      
+      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, siteSpec);
       job.script = currentScript;
       
       console.log('✅ Code generated successfully');
       console.log(`📝 Script ID: ${currentScript.id}`);
       console.log(`🛠️ Dependencies: ${currentScript.dependencies?.join(', ') || 'None'}`);
 
-      // Step 3: Code is ready for execution
+      // Step 4: Code is ready for execution
       await this.updateJobStatus(job, 'completed');
-      console.log('\n✅ Step 3: Code generation completed successfully!');
+      console.log('\n✅ Step 4: Code generation completed successfully!');
 
       console.log('\n🎉 CodeGen Pipeline Completed Successfully!');
       console.log(`✅ Script ready for execution`);

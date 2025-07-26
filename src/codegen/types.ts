@@ -83,7 +83,7 @@ export interface CodegenJob {
   script?: GeneratedScript;
   testResult?: TestResult;
   executionResult?: ExecutionResult;
-  status: 'parsing' | 'generating' | 'refining' | 'executing' | 'completed' | 'failed';
+  status: 'parsing' | 'analyzing' | 'generating' | 'refining' | 'executing' | 'completed' | 'failed';
   iterations: number;
   createdAt: Date;
   updatedAt: Date;
