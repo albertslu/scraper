@@ -26,7 +26,8 @@ export class ExecutionModule {
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
       sandboxDir: config.sandboxDir || './sandbox',
-      testMode: config.testMode || false
+      testMode: config.testMode || false,
+      retryContext: config.retryContext || null
     };
     
     this.tempDir = this.config.sandboxDir;
@@ -225,7 +226,7 @@ async function executeScript() {
     // Limit results if specified
     const limitedResults = results.slice(0, ${config.maxItems});
     if (limitedResults.length < results.length) {
-      console.log(\`⚠️ Results limited to \${config.maxItems} items\`);
+      console.log(\`⚠️ Results limited to ${config.maxItems} items\`);
     }
     
     // Output results in structured format
