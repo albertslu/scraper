@@ -5,20 +5,17 @@ import { ScrapingRequest } from '@/lib/codegen/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, url, clarifications } = await request.json()
+    const { scriptId, clarifications, originalPrompt, url } = await request.json()
     
-    if (!prompt || !url) {
+    if (!scriptId || !clarifications || !originalPrompt || !url) {
       return NextResponse.json({ 
-        error: 'Both prompt and URL are required' 
+        error: 'Script ID, clarifications, original prompt, and URL are required' 
       }, { status: 400 })
     }
 
-    console.log('🚀 Starting code generation...')
-    console.log('📋 Prompt:', prompt)
-    console.log('🌐 URL:', url)
-    if (clarifications) {
-      console.log('💬 User clarifications:', clarifications)
-    }
+    console.log('🔄 Regenerating script with user clarifications...')
+    console.log('📝 Script ID:', scriptId)
+    console.log('💬 Clarifications:', clarifications)
 
     // Create orchestrator instance
     const orchestrator = createOrchestrator({
@@ -26,59 +23,53 @@ export async function POST(request: NextRequest) {
       testTimeout: 30000
     })
 
+    // Create enhanced prompt with clarifications
+    const enhancedPrompt = `${originalPrompt}
+
+User Clarifications:
+${Object.entries(clarifications).map(([question, answer]) => 
+  `Q: ${question}\nA: ${answer}`
+).join('\n\n')}`
+
     // Create scraping request with clarifications
     const scrapingRequest: ScrapingRequest = {
       url,
-      prompt: clarifications ? `${prompt}\n\nUser clarifications: ${JSON.stringify(clarifications)}` : prompt
+      prompt: enhancedPrompt
     }
 
-    // Execute the code generation pipeline
+    // Execute the code generation pipeline with clarifications
     const codegenJob = await orchestrator.executeCodegenPipeline(scrapingRequest)
 
     if (!codegenJob.script || !codegenJob.requirements) {
       throw new Error('Code generation failed - no script or requirements generated')
     }
 
-    console.log('✅ Code generated, now testing...')
+    console.log('✅ Code regenerated with clarifications, now testing...')
 
-    // Test the script first (Canvas approach)
+    // Test the refined script
     const testResults = await orchestrator.testAndClarify(codegenJob, scrapingRequest)
 
     if (!testResults.shouldProceed) {
-      console.log('🤔 Test failed, returning clarifying questions to user')
+      console.log('🤔 Test still failed after clarifications, returning more questions')
       
-      // Save the script for potential use after clarification
-      const savedScript = await db.createScraperScript({
-        title: `${codegenJob.title} (Needs Clarification)`,
-        prompt: prompt,
-        url: url,
-        generated_code: codegenJob.script.code,
-        requirements: codegenJob.requirements,
-        tool_type: codegenJob.script.toolType,
-        output_schema: codegenJob.requirements.outputFields,
-        explanation: codegenJob.script.explanation,
-        dependencies: codegenJob.script.dependencies
-      })
-
       return NextResponse.json({
         success: false,
         needsClarification: true,
-        scriptId: savedScript.id,
+        scriptId: scriptId,
         title: codegenJob.title,
         testResult: testResults.testResult,
         clarifyingQuestions: testResults.clarifyingQuestions,
         code: codegenJob.script.code,
-        explanation: codegenJob.script.explanation
+        explanation: codegenJob.script.explanation,
+        attempt: 2
       })
     }
 
-    console.log('✅ Test passed! Saving script and creating job...')
+    console.log('✅ Test passed! Updating script and creating job...')
 
-    // Save the generated script to database
-    const savedScript = await db.createScraperScript({
+    // Update the existing script with new code
+    await db.updateScraperScript(scriptId, {
       title: codegenJob.title,
-      prompt: prompt,
-      url: url,
       generated_code: codegenJob.script.code,
       requirements: codegenJob.requirements,
       tool_type: codegenJob.script.toolType,
@@ -89,19 +80,18 @@ export async function POST(request: NextRequest) {
 
     // Create a scraping job linked to this script
     const scrapingJob = await db.createScrapingJob(url, {
-      prompt: prompt,
+      prompt: enhancedPrompt,
       title: codegenJob.title,
-      script_id: savedScript.id
+      script_id: scriptId
     })
 
-    console.log('✅ Code generation completed successfully!')
-    console.log('📝 Script ID:', savedScript.id)
+    console.log('✅ Script clarification completed successfully!')
     console.log('🎯 Job ID:', scrapingJob.id)
 
     return NextResponse.json({
       success: true,
       jobId: scrapingJob.id,
-      scriptId: savedScript.id,
+      scriptId: scriptId,
       title: codegenJob.title,
       code: codegenJob.script.code,
       explanation: codegenJob.script.explanation,
@@ -111,11 +101,11 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('💥 Code generation failed:', error)
+    console.error('💥 Script clarification failed:', error)
     
     return NextResponse.json({
       success: false,
-      error: 'Code generation failed',
+      error: 'Script clarification failed',
       details: error instanceof Error ? error.message : String(error)
     }, { status: 500 })
   }

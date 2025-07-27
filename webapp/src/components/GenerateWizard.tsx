@@ -16,6 +16,16 @@ interface GenerationResult {
   explanation?: string
   error?: string
   details?: string
+  needsClarification?: boolean
+  clarifyingQuestions?: {
+    questions: Array<{
+      question: string
+      options?: string[]
+      type: 'multiple_choice' | 'text' | 'boolean'
+    }>
+    reasoning: string
+  }
+  testResult?: any
 }
 
 interface ExecutionResult {
@@ -30,7 +40,7 @@ interface ExecutionResult {
   details?: string
 }
 
-type WizardStep = 'input' | 'preview' | 'execution'
+type WizardStep = 'input' | 'clarification' | 'preview' | 'execution'
 
 export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   const [currentStep, setCurrentStep] = useState<WizardStep>('input')
@@ -40,6 +50,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   const [isExecuting, setIsExecuting] = useState(false)
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({})
 
   // Step 1: Handle prompt + URL submission
   const handleGenerate = async (e: React.FormEvent) => {
@@ -61,6 +72,48 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
 
       if (data.success) {
         setCurrentStep('preview')
+      } else if (data.needsClarification) {
+        setCurrentStep('clarification')
+      }
+    } catch (error) {
+      setGenerationResult({
+        success: false,
+        error: 'Network error',
+        details: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Handle clarification submission
+  const handleClarification = async () => {
+    if (!generationResult?.scriptId) return
+
+    setIsGenerating(true)
+
+    try {
+      const response = await fetch('/api/generate/clarify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scriptId: generationResult.scriptId,
+          clarifications: clarificationAnswers,
+          originalPrompt: prompt,
+          url: url
+        }),
+      })
+
+      const data = await response.json()
+      setGenerationResult(data)
+
+      if (data.success) {
+        setCurrentStep('preview')
+      } else if (data.needsClarification) {
+        // Still needs more clarification - stay on clarification step
+        setClarificationAnswers({}) // Reset answers for new questions
       }
     } catch (error) {
       setGenerationResult({
@@ -112,7 +165,11 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
 
   // Navigation helpers
   const goBack = () => {
-    if (currentStep === 'preview') setCurrentStep('input')
+    if (currentStep === 'clarification') setCurrentStep('input')
+    if (currentStep === 'preview') {
+      const prevStep = generationResult?.needsClarification ? 'clarification' : 'input'
+      setCurrentStep(prevStep)
+    }
     if (currentStep === 'execution') setCurrentStep('preview')
   }
 
@@ -122,6 +179,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     setUrl('')
     setGenerationResult(null)
     setExecutionResult(null)
+    setClarificationAnswers({})
   }
 
   // Helper function to provide intelligent error suggestions
@@ -188,11 +246,21 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   }
 
   const renderStepIndicator = () => {
-    const steps = [
+    const baseSteps = [
       { id: 'input', label: 'Prompt & URL', completed: currentStep !== 'input' },
+    ]
+    
+    // Add clarification step if needed
+    if (generationResult?.needsClarification || currentStep === 'clarification') {
+      baseSteps.push({ id: 'clarification', label: 'Clarification', completed: ['preview', 'execution'].includes(currentStep) })
+    }
+    
+    baseSteps.push(
       { id: 'preview', label: 'Code Preview', completed: currentStep === 'execution' },
       { id: 'execution', label: 'Execute & Results', completed: false },
-    ]
+    )
+    
+    const steps = baseSteps
 
     return (
       <div className="flex items-center justify-center mb-8">
@@ -292,7 +360,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
       </form>
 
       {/* Generation Result */}
-      {generationResult && !generationResult.success && (
+      {generationResult && !generationResult.success && !generationResult.needsClarification && (
         <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-start">
             <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
@@ -487,6 +555,134 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     </div>
   )
 
+  const renderClarificationStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">🤔 We Need Some Clarification</h2>
+          <p className="text-gray-600">
+            Our initial test found some issues. Please help us understand the website better to generate a more effective scraper.
+          </p>
+          {generationResult?.clarifyingQuestions?.reasoning && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Why we're asking:</strong> {generationResult.clarifyingQuestions.reasoning}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {generationResult?.testResult && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 className="text-sm font-medium text-yellow-800 mb-2">📊 Test Results</h3>
+            <p className="text-sm text-yellow-700">
+              Found {generationResult.testResult.totalFound} items in {(generationResult.testResult.executionTime / 1000).toFixed(1)}s
+            </p>
+            {generationResult.testResult.errors && generationResult.testResult.errors.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-yellow-800">Errors:</p>
+                <ul className="text-xs text-yellow-700 mt-1">
+                  {generationResult.testResult.errors.map((error: string, idx: number) => (
+                    <li key={idx}>• {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {generationResult?.clarifyingQuestions?.questions.map((question, index) => (
+            <div key={index} className="border border-gray-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                {question.question}
+              </label>
+              
+              {question.type === 'multiple_choice' && question.options ? (
+                <div className="space-y-2">
+                  {question.options.map((option, optionIndex) => (
+                    <label key={optionIndex} className="flex items-center">
+                      <input
+                        type="radio"
+                        name={`question-${index}`}
+                        value={option}
+                        checked={clarificationAnswers[question.question] === option}
+                        onChange={(e) => setClarificationAnswers(prev => ({
+                          ...prev,
+                          [question.question]: e.target.value
+                        }))}
+                        className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{option}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : question.type === 'boolean' ? (
+                <div className="space-y-2">
+                  {['Yes', 'No'].map((option) => (
+                    <label key={option} className="flex items-center">
+                      <input
+                        type="radio"
+                        name={`question-${index}`}
+                        value={option}
+                        checked={clarificationAnswers[question.question] === option}
+                        onChange={(e) => setClarificationAnswers(prev => ({
+                          ...prev,
+                          [question.question]: e.target.value
+                        }))}
+                        className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{option}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  value={clarificationAnswers[question.question] || ''}
+                  onChange={(e) => setClarificationAnswers(prev => ({
+                    ...prev,
+                    [question.question]: e.target.value
+                  }))}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={3}
+                  placeholder="Please provide details..."
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-between items-center mt-8">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Prompt
+          </button>
+
+          <button
+            onClick={handleClarification}
+            disabled={isGenerating || Object.keys(clarificationAnswers).length === 0}
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Regenerating Script...
+              </>
+            ) : (
+              <>
+                Generate Improved Script
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   const renderExecutionStep = () => (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-6">
@@ -639,6 +835,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
       
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         {currentStep === 'input' && renderInputStep()}
+        {currentStep === 'clarification' && renderClarificationStep()}
         {currentStep === 'preview' && renderPreviewStep()}
         {currentStep === 'execution' && renderExecutionStep()}
       </div>

@@ -110,6 +110,18 @@ export const db = {
     return data
   },
 
+  async updateScraperScript(id: string, updates: Partial<Omit<ScraperScript, 'id' | 'created_at' | 'updated_at'>>): Promise<ScraperScript> {
+    const { data, error } = await supabase
+      .from('scraper_scripts')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
   // ========== SCRAPING JOBS (Enhanced) ==========
   
   async createScrapingJob(

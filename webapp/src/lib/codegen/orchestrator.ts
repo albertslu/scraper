@@ -373,6 +373,85 @@ export class CodegenOrchestrator {
     }
   }
 
+  /**
+   * Test a script on a single sample and generate clarifying questions if it fails
+   */
+  async testAndClarify(
+    job: CodegenJob,
+    request: ScrapingRequest
+  ): Promise<{
+    testResult: any;
+    clarifyingQuestions?: {
+      questions: Array<{
+        question: string;
+        options?: string[];
+        type: 'multiple_choice' | 'text' | 'boolean';
+      }>;
+      reasoning: string;
+    };
+    shouldProceed: boolean;
+  }> {
+    if (!job.script || !job.requirements) {
+      throw new Error('Job must have script and requirements to test');
+    }
+
+    console.log('🧪 Testing script on single sample...');
+    
+    try {
+      // Execute in test mode (single sample)
+      const testResult = await this.executionModule.executeScript(job.script, {
+        timeout: 60000, // 1 minute for test
+        testMode: true,
+        maxItems: 5 // Limit to small sample
+      });
+      
+      if (testResult.success && testResult.totalFound > 0) {
+        console.log(`✅ Test passed: Found ${testResult.totalFound} items`);
+        return {
+          testResult,
+          shouldProceed: true
+        };
+      } else {
+        console.log(`⚠️ Test failed: Found ${testResult.totalFound} items`);
+        console.log('🤔 Generating clarifying questions...');
+        
+        // Generate clarifying questions using refinement engine
+        const clarifyingQuestions = await this.refinementEngine.generateClarifyingQuestions(
+          job.requirements,
+          testResult.errors || ['No items found during test'],
+          request.url
+        );
+
+        return {
+          testResult,
+          clarifyingQuestions,
+          shouldProceed: false
+        };
+      }
+    } catch (error) {
+      console.error('❌ Test execution failed:', error);
+      
+      const clarifyingQuestions = await this.refinementEngine.generateClarifyingQuestions(
+        job.requirements,
+        [error instanceof Error ? error.message : String(error)],
+        request.url
+      );
+
+      return {
+        testResult: {
+          success: false,
+          data: [],
+          totalFound: 0,
+          errors: [error instanceof Error ? error.message : String(error)],
+          executionTime: 0,
+          metadata: {}
+        },
+        clarifyingQuestions,
+        shouldProceed: false
+      };
+    }
+  }
+
   private async updateJobStatus(job: CodegenJob, status: CodegenJob['status']): Promise<void> {
     job.status = status;
     job.updatedAt = new Date();
