@@ -135,6 +135,161 @@ export class CodegenOrchestrator {
   }
 
   /**
+   * Execute retry code generation - reuses existing requirements, generates improved code
+   */
+  async executeRetryCodegen(
+    existingRequirements: any,
+    request: ScrapingRequest,
+    retryContext: {
+      previousToolType: string;
+      previousCode: string;
+      totalFound: number;
+      expectedItems: number;
+      issues: string[];
+      sampleData: any[];
+    }
+  ): Promise<CodegenJob> {
+    const job: CodegenJob = {
+      id: uuidv4(),
+      request,
+      requirements: existingRequirements,
+      status: 'generating',
+      iterations: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      title: `${existingRequirements.target} (Retry)`
+    };
+
+    try {
+      console.log('🔄 Starting Retry CodeGen Pipeline...\n');
+      console.log('📋 Reusing existing requirements (skipping prompt parsing)');
+      console.log(`🎯 Target: ${existingRequirements.target}`);
+      console.log(`📊 Previous results: ${retryContext.totalFound}/${retryContext.expectedItems}`);
+      console.log(`🔧 Previous tool: ${retryContext.previousToolType}`);
+      
+      // Analyze retry strategy
+      const shouldSwitchTool = this.shouldSwitchTool(retryContext);
+      const recommendedTool = shouldSwitchTool 
+        ? this.getAlternativeTool(retryContext.previousToolType, retryContext)
+        : retryContext.previousToolType;
+      
+      console.log(`🛠️ Retry tool decision: ${recommendedTool} ${shouldSwitchTool ? '(switched)' : '(same)'}`);
+      
+      // Update tool recommendation based on retry analysis
+      const hasPartialSuccess = retryContext.totalFound > 0;
+      const retryRequirements = {
+        ...existingRequirements,
+        toolRecommendation: recommendedTool,
+        reasoning: shouldSwitchTool ? 
+          (hasPartialSuccess ? 
+            `Retry strategy: Enhanced approach - ${retryContext.previousToolType} found ${retryContext.totalFound}/${retryContext.expectedItems} items, switching to ${recommendedTool} to improve extraction while preserving what worked` :
+            `Retry strategy: Complete rebuild - ${retryContext.previousToolType} found 0 items, switching to ${recommendedTool} for fundamentally different approach`) :
+          `Retry strategy: Optimize current approach - ${retryContext.previousToolType} found good results (${retryContext.totalFound}/${retryContext.expectedItems}), improving pagination/scope`
+      };
+
+      // Create enhanced site context for retry
+      const siteSpec = {
+        url: request.url,
+        title: 'Retry Generation',
+        tool_choice: recommendedTool,
+        tool_reasoning: retryRequirements.reasoning,
+        selectors: {
+          listing_items: null,
+          pagination: null,
+          load_more: null
+        },
+        pagination_strategy: {
+          type: retryContext.totalFound > 0 ? 'multi_page' : 'single_page',
+          description: retryContext.totalFound > 0 
+            ? 'Focus on pagination/load-more to find remaining items'
+            : 'Focus on finding correct selectors'
+        },
+        output_fields: retryRequirements.outputFields.map((field: any) => ({
+          name: field.name,
+          type: field.type,
+          required: field.required,
+          description: field.description,
+          extraction_method: 'css_selector',
+          source_location: 'TBD'
+        })),
+        retry_context: {
+          previous_issues: retryContext.issues,
+          previous_results: retryContext.totalFound,
+          expected_results: retryContext.expectedItems,
+          sample_data: retryContext.sampleData
+        }
+      };
+
+      // Generate improved code with retry context
+      console.log('\n🔧 Generating improved scraping code with retry context...');
+      
+      const currentScript = await this.codeGenerator.generateScript(retryRequirements, request.url, siteSpec);
+      job.script = currentScript;
+      
+      console.log('✅ Retry code generated successfully');
+      console.log(`📝 Script ID: ${currentScript.id}`);
+      console.log(`🛠️ Tool: ${currentScript.toolType}`);
+
+      await this.updateJobStatus(job, 'completed');
+      console.log('\n✅ Retry CodeGen Pipeline Completed!');
+
+      return job;
+
+    } catch (error) {
+      console.error('💥 Retry pipeline failed:', error);
+      await this.updateJobStatus(job, 'failed');
+      throw error;
+    }
+  }
+
+  private shouldSwitchTool(retryContext: any): boolean {
+    // Switch if we found 0 items (complete failure)
+    if (retryContext.totalFound === 0) return true;
+    
+    // If we found some items but not enough, prefer hybrid approach over complete switch
+    if (retryContext.totalFound > 0 && retryContext.totalFound < retryContext.expectedItems * 0.8) {
+      // Partial success - enhance rather than replace
+      return true; // Will switch to hybrid if not already hybrid
+    }
+    
+    // Stay with same tool if we found a reasonable amount (just needs optimization)
+    return false;
+  }
+
+  private getAlternativeTool(previousTool: string, retryContext: any): string {
+    const hasPartialSuccess = retryContext.totalFound > 0;
+    
+    if (hasPartialSuccess) {
+      // Partial success - enhance the working approach
+      switch (previousTool) {
+        case 'playwright': 
+          // Playwright found some items but missed others - use hybrid to enhance extraction
+          return 'hybrid';
+        case 'stagehand': 
+          // Stagehand found some but not all - try playwright for better navigation
+          return 'hybrid';
+        case 'hybrid': 
+          // Hybrid already tried - try playwright-stealth for anti-bot issues
+          return 'playwright-stealth';
+        case 'playwright-stealth': 
+          // Last resort - go back to basic playwright with lessons learned
+          return 'playwright';
+        default: 
+          return 'hybrid';
+      }
+    } else {
+      // Complete failure - try fundamentally different approach
+      switch (previousTool) {
+        case 'playwright': return 'stagehand';
+        case 'stagehand': return 'playwright-stealth';
+        case 'hybrid': return 'playwright-stealth';
+        case 'playwright-stealth': return 'stagehand';
+        default: return 'playwright';
+      }
+    }
+  }
+
+  /**
    * Refine an existing script based on user feedback
    */
   async refineScript(job: CodegenJob, userFeedback: string): Promise<CodegenJob> {
