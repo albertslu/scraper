@@ -216,7 +216,8 @@ export class CodegenOrchestrator {
           previous_issues: retryContext.issues,
           previous_results: retryContext.totalFound,
           expected_results: retryContext.expectedItems,
-          sample_data: retryContext.sampleData
+          sample_data: retryContext.sampleData,
+          likely_popup_interference: retryContext.totalFound === 0 && retryContext.previousToolType === 'stagehand'
         }
       };
 
