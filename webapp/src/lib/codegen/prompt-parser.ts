@@ -137,8 +137,8 @@ export class PromptParser {
     let basePrompt = `You are an expert web scraping analyst. Your job is to analyze user prompts and URLs to extract structured requirements for building web scrapers.
 
 TOOL SELECTION GUIDELINES:
-- **Stagehand**: Use for complex sites with dynamic content, anti-bot protection, or when natural language extraction is beneficial. Best for modern SPAs, sites with JavaScript rendering, or when selectors might change frequently. **⚠️ WARNING: 5-minute hard timeout limit - avoid for large datasets or tasks visiting individual detail pages.**
-- **Playwright**: Use for simple, static sites with predictable structure and reliable selectors. Best for traditional server-rendered pages with consistent HTML structure. **No time limits - good for large datasets.**
+- **Playwright**: **DEFAULT CHOICE**. Use for most sites with structured data, tables, lists, or predictable content patterns. Best for e-commerce, news sites, directories, rankings, and traditional web pages. More reliable, faster, and easier to debug. **No time limits - good for large datasets.**
+- **Stagehand**: Use ONLY when Playwright is insufficient. Required for: heavy anti-bot protection, complex authentication flows, sites that require natural language interaction, or when CSS selectors are unreliable due to dynamic structure. **⚠️ WARNING: 5-minute hard timeout limit - avoid for large datasets or tasks visiting individual detail pages.**
 - **Hybrid**: **IDEAL for multi-page scraping with complex content extraction.** Use when you need to visit many URLs (pagination, detail pages) but the content extraction is complex. Playwright handles URL collection/navigation efficiently, then Stagehand extracts content intelligently within time limits.
 - **Playwright-Stealth**: **AUTO-SELECT when anti-bot protection detected.** Uses advanced evasion techniques including stealth browser args, realistic headers, human-like delays, and automation indicator removal. Best for Cloudflare/Incapsula protected sites.
 
@@ -154,10 +154,12 @@ TOOL SELECTION GUIDELINES:
 - **Large datasets with rich content**: When you need to visit 10+ pages but extract complex/varied data from each
 - **Time-sensitive complex extraction**: When Stagehand alone would timeout, but Playwright alone would struggle with content complexity
 
-COMPLEXITY ASSESSMENT:
-- **Simple**: Static HTML pages, predictable structure, basic pagination
-- **Medium**: Some JavaScript rendering, moderate pagination, standard forms
-- **Complex**: Heavy JavaScript, anti-bot protection, complex authentication, dynamic loading
+COMPLEXITY ASSESSMENT & TOOL MAPPING:
+- **Simple** → **Playwright**: Static HTML, clear structure, basic pagination (e.g., product listings, news articles, directories)
+- **Medium** → **Playwright**: Some JavaScript, standard forms, predictable pagination (e.g., search results, rankings, reviews)
+- **Complex** → **Stagehand**: Heavy JavaScript, anti-bot protection, complex authentication, dynamic loading, unreliable selectors
+
+**BIAS TOWARD PLAYWRIGHT**: Unless the site explicitly requires natural language interaction or has known anti-bot protection, prefer Playwright for better reliability and performance.
 
 OUTPUT FIELD EXTRACTION RULES:
 - ONLY extract fields that the user explicitly mentions in their prompt

@@ -528,13 +528,15 @@ executeScript().catch(error => {
    * Clean up temporary files
    */
   private cleanup(filePath: string): void {
-    try {
-      if (existsSync(filePath)) {
-        unlinkSync(filePath);
-      }
-    } catch (error) {
-      console.warn('⚠️ Failed to clean up temp file:', filePath);
-    }
+    // Temporarily disabled cleanup for debugging
+    console.log('🔍 Keeping temp file for debugging:', filePath);
+    // try {
+    //   if (existsSync(filePath)) {
+    //     unlinkSync(filePath);
+    //   }
+    // } catch (error) {
+    //   console.warn('⚠️ Failed to clean up temp file:', filePath);
+    // }
   }
 }
 

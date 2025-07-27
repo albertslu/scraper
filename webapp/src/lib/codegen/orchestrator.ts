@@ -63,49 +63,48 @@ export class CodegenOrchestrator {
       console.log(`📊 Complexity: ${requirements.complexity}`);
       console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Preflight Analysis - Comprehensive website analysis
-      console.log('\n🔍 Step 2: Running Preflight Analysis...');
+      // Step 2: Skip slow site analysis - Canvas will validate through testing
+      console.log('\n⏭️ Step 2: Skipping site analysis - Canvas will validate through testing...');
       
-      let preflightResult;
-      try {
-        preflightResult = await this.preflightAnalyzer.analyze(request.url, requirements, request.retryContext);
-        console.log('✅ Preflight Analysis completed successfully');
-        console.log(`📊 Confidence: ${Math.round(preflightResult.confidence * 100)}%`);
-        console.log(`📊 Ready for codegen: ${preflightResult.ready_for_codegen ? 'Yes' : 'No'}`);
-        console.log(`📊 Tool choice: ${preflightResult.site_spec.tool_choice}`);
-        console.log(`📊 Listing selector: ${preflightResult.site_spec.selectors.listing_items || 'None'}`);
-        console.log(`📊 Micro-test: ${preflightResult.site_spec.micro_test_results?.success ? 'Passed' : 'Failed'}`);
-        
-        if (!preflightResult.ready_for_codegen) {
-          console.warn('⚠️ Preflight analysis indicates issues:', preflightResult.next_steps);
-          
-          // Override for multi-page scenarios where listing selectors work
-          if (preflightResult.site_spec.selectors.listing_items && 
-              preflightResult.site_spec.micro_test_results && 
-              preflightResult.site_spec.micro_test_results.items_extracted > 0) {
-            console.log('🔧 Overriding low confidence - listing selectors work, proceeding with full codegen');
-            preflightResult.ready_for_codegen = true;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ Preflight analysis failed, proceeding with basic analysis:', error);
-        preflightResult = undefined;
-      }
+      // Create minimal site context for code generation
+      const siteSpec = {
+        url: request.url,
+        title: 'Canvas Generation',
+        tool_choice: requirements.toolRecommendation,
+        tool_reasoning: `Selected ${requirements.toolRecommendation} based on complexity assessment`,
+        selectors: {
+          listing_items: null,
+          pagination: null,
+          load_more: null
+        },
+        pagination_strategy: {
+          type: 'single_page',
+          description: 'Canvas will determine pagination needs during testing'
+        },
+        output_fields: requirements.outputFields.map(field => ({
+          name: field.name,
+          type: field.type,
+          required: field.required,
+          description: field.description,
+          extraction_method: 'css_selector',
+          source_location: 'TBD' // LLM will determine
+        }))
+      };
 
-      // Step 3: Generate initial code with website analysis
+      // Step 3: Generate initial code
       await this.updateJobStatus(job, 'generating');
-      console.log('\n🔧 Step 3: Generating executable scraping code...');
+      console.log('\n🔧 Step 3: Generating scraping code...');
       
-      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, preflightResult?.site_spec);
+      let currentScript = await this.codeGenerator.generateScript(requirements, request.url, siteSpec);
       job.script = currentScript;
       
       console.log('✅ Code generated successfully');
       console.log(`📝 Script ID: ${currentScript.id}`);
       console.log(`🛠️ Dependencies: ${currentScript.dependencies?.join(', ') || 'None'}`);
 
-      // Step 3: Code is ready for execution
+      // Step 4: Code is ready for execution
       await this.updateJobStatus(job, 'completed');
-      console.log('\n✅ Step 3: Code generation completed successfully!');
+      console.log('\n✅ Step 4: Code generation completed successfully!');
 
       console.log('\n🎉 CodeGen Pipeline Completed Successfully!');
       console.log(`✅ Script ready for execution`);
