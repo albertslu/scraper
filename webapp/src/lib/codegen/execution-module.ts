@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { GeneratedScript, ExecutionResult } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -25,7 +26,7 @@ export class ExecutionModule {
       timeout: config.timeout || 600000, // 10 minutes default
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
-      sandboxDir: config.sandboxDir || './sandbox',
+      sandboxDir: config.sandboxDir || (process.env.VERCEL ? '/tmp/sandbox' : join(tmpdir(), 'scraper-sandbox')),
       testMode: config.testMode || false,
       retryContext: config.retryContext || null
     };
@@ -519,8 +520,16 @@ executeScript().catch(error => {
    * Ensure sandbox directory exists
    */
   private ensureSandboxDirectory(): void {
-    if (!existsSync(this.tempDir)) {
-      mkdirSync(this.tempDir, { recursive: true });
+    try {
+      if (!existsSync(this.tempDir)) {
+        mkdirSync(this.tempDir, { recursive: true });
+        console.log(`📁 Created sandbox directory: ${this.tempDir}`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to create sandbox directory: ${this.tempDir}`, error);
+      // Fallback to system temp directory
+      this.tempDir = tmpdir();
+      console.log(`📁 Falling back to system temp directory: ${this.tempDir}`);
     }
   }
 
