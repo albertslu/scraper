@@ -356,7 +356,7 @@ export class SelectorValidator {
     // Initialize Stagehand
     this.stagehand = new Stagehand({
       env: "LOCAL",
-      modelName: "claude-sonnet-4-20250514",
+      modelName: "claude-sonnet-4-20250514" as any,
       domSettleTimeoutMs: 5000,
     });
     

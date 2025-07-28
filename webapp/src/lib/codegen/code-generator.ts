@@ -116,7 +116,7 @@ export async function main(): Promise<any[]> {
   // Initialize Stagehand
   const stagehand = new Stagehand({
     env: "LOCAL",
-    modelName: "claude-sonnet-4-20250514",
+    modelName: "claude-sonnet-4-20250514" as any,
     domSettleTimeoutMs: 5000,
   });
   
@@ -242,8 +242,8 @@ export async function main(): Promise<any[]> {
 9. **Periodic Results**: For large datasets, output partial results every 10-20 items to handle timeouts gracefully
 
 **STAGEHAND SPECIFIC RULES:**
-- **For protected sites**: use \`new Stagehand({ env: "BROWSERBASE", apiKey: process.env.BROWSERBASE_API_KEY, projectId: process.env.BROWSERBASE_PROJECT_ID, modelName: "claude-sonnet-4-20250514", browserSettings: { stealth: true, solveCaptchas: true } })\`
-- **For regular sites**: use \`new Stagehand({ env: "LOCAL", modelName: "claude-sonnet-4-20250514", domSettleTimeoutMs: 5000 })\`
+- **For protected sites**: use \`new Stagehand({ env: "BROWSERBASE", apiKey: process.env.BROWSERBASE_API_KEY, projectId: process.env.BROWSERBASE_PROJECT_ID, modelName: "claude-sonnet-4-20250514" as any, browserSettings: { stealth: true, solveCaptchas: true } })\`
+- **For regular sites**: use \`new Stagehand({ env: "LOCAL", modelName: "claude-sonnet-4-20250514" as any, domSettleTimeoutMs: 5000 })\`
 - ALWAYS call \`await stagehand.init()\` before use
 - ALWAYS use \`const page = stagehand.page\` after init
 - ALWAYS call \`await stagehand.close()\` in finally block
@@ -392,7 +392,7 @@ export async function main(): Promise<any[]> {
     
     stagehand = new Stagehand({
       env: "LOCAL",
-      modelName: "claude-sonnet-4-20250514",
+      modelName: "claude-sonnet-4-20250514" as any,
       domSettleTimeoutMs: 5000,
     });
     
