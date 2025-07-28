@@ -137,76 +137,17 @@ def execute_typescript_script(
             
             # Force headless mode for Stagehand specifically
             if "@browserbasehq/stagehand" in dependencies:
-                # Stagehand uses browserLaunchConfig or similar patterns
-                headless_script = headless_script.replace(
-                    "browserLaunchConfig: {",
-                    "browserLaunchConfig: { headless: true,"
-                ).replace(
-                    "launchOptions: {",
-                    "launchOptions: { headless: true,"
-                ).replace(
-                    "playwright: {",
-                    "playwright: { headless: true,"
-                )
+                # Just ensure environment variables are set properly
+                print("🎭 Configuring Stagehand for headless server environment...")
                 
-                # Configure Stagehand with explicit LLM and BrowserBase configuration
-                anthropic_key = os.environ.get('ANTHROPIC_API_KEY', '')
-                browserbase_key = os.environ.get('BROWSERBASE_API_KEY', '')
-                browserbase_project = os.environ.get('BROWSERBASE_PROJECT_ID', '')
-                
-                # Build Stagehand config based on available credentials
-                if browserbase_key and browserbase_project:
-                     stagehand_config = f"""{{
-     env: "BROWSERBASE",
-     apiKey: process.env.BROWSERBASE_API_KEY || "{browserbase_key}",
-     projectId: process.env.BROWSERBASE_PROJECT_ID || "{browserbase_project}",
-     llmClient: {{
-       modelName: "claude-sonnet-4-20250514",
-       apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
-     }}"""
-                else:
-                     stagehand_config = f"""{{
-     env: "LOCAL",
-     headless: true,
-     llmClient: {{
-       modelName: "claude-sonnet-4-20250514",
-       apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
-     }}"""
-                
-                # Simple and reliable approach: just ensure environment variables are set
-                # and use the simplest Stagehand configuration that actually works
-                print("🔧 Applying simple Stagehand configuration with Claude 4...")
-                
-                # Replace Stagehand configurations with the working pattern
-                import re
-                
-                # Pattern 1: new Stagehand({ ... }) - replace with simple config
-                pattern1 = r'new Stagehand\(\{[^}]*\}\)'
-                if re.search(pattern1, headless_script):
-                    simple_config = '''new Stagehand({
-    env: "LOCAL",
-    modelName: "claude-sonnet-4-20250514"
-})'''
-                    headless_script = re.sub(pattern1, simple_config, headless_script)
-                    print(f"✅ Applied simple Stagehand configuration")
-                
-                # Pattern 2: Also handle cases where it's just Stagehand({ without new
-                pattern2 = r'(?<!new\s)Stagehand\(\{[^}]*\}\)'
-                if re.search(pattern2, headless_script):
-                    simple_config2 = '''Stagehand({
-    env: "LOCAL", 
-    modelName: "claude-sonnet-4-20250514"
-})'''
-                    headless_script = re.sub(pattern2, simple_config2, headless_script)
-                    print(f"✅ Applied simple Stagehand configuration (pattern 2)")
-                
-                # Also ensure DISPLAY environment variable handling
+                # Set DISPLAY for Stagehand (it needs this even in headless mode)
                 headless_script = f"""
-// Force headless mode for Stagehand in server environment
+// Set display for Stagehand headless mode
 process.env.DISPLAY = ':99';
 
 {headless_script}
 """
+                print("✅ Stagehand environment configured")
             
             # Handle hybrid mode scripts that might use both tools
             if "hybrid" in tool_type.lower() or ("stagehand" in str(dependencies) and "playwright" in str(dependencies)):
