@@ -261,12 +261,17 @@ cython_debug/
 
 # Data files and outputs
 *.csv
-*.json
+# *.json  # Don't ignore package.json and other config files
 *.xlsx
 *.xls
 data/
 output/
 logs/
+
+# Ignore data JSON files but keep config files
+/output/*.json
+/data/*.json
+/downloads/*.json
 
 # OS generated files
 .DS_Store
