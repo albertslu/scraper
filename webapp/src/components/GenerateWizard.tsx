@@ -17,6 +17,7 @@ interface GenerationResult {
   error?: string
   details?: string
   needsClarification?: boolean
+  needsValidation?: boolean  // Add this new field
   clarifyingQuestions?: {
     questions: Array<{
       question: string
@@ -26,6 +27,7 @@ interface GenerationResult {
     reasoning: string
   }
   testResult?: any
+  sampleData?: any[]  // Add this new field
 }
 
 interface ExecutionResult {
@@ -40,7 +42,7 @@ interface ExecutionResult {
   details?: string
 }
 
-type WizardStep = 'input' | 'clarification' | 'preview' | 'execution'
+type WizardStep = 'input' | 'clarification' | 'validation' | 'preview' | 'execution'
 
 export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   const [currentStep, setCurrentStep] = useState<WizardStep>('input')
@@ -51,6 +53,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({})
+  const [validationFeedback, setValidationFeedback] = useState('')
 
   // Step 1: Handle prompt + URL submission
   const handleGenerate = async (e: React.FormEvent) => {
@@ -72,6 +75,8 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
 
       if (data.success) {
         setCurrentStep('preview')
+      } else if (data.needsValidation) {
+        setCurrentStep('validation')
       } else if (data.needsClarification) {
         setCurrentStep('clarification')
       }
@@ -111,9 +116,54 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
 
       if (data.success) {
         setCurrentStep('preview')
+      } else if (data.needsValidation) {
+        setCurrentStep('validation')
       } else if (data.needsClarification) {
         // Still needs more clarification - stay on clarification step
         setClarificationAnswers({}) // Reset answers for new questions
+      }
+    } catch (error) {
+      setGenerationResult({
+        success: false,
+        error: 'Network error',
+        details: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Handle validation submission
+  const handleValidation = async (isCorrect: boolean) => {
+    if (!generationResult?.scriptId || !generationResult?.jobId) return
+
+    setIsGenerating(true)
+
+    try {
+      const response = await fetch('/api/generate/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scriptId: generationResult.scriptId,
+          jobId: generationResult.jobId,
+          userFeedback: validationFeedback,
+          isCorrect: isCorrect
+        }),
+      })
+
+      const data = await response.json()
+      setGenerationResult(data)
+
+      if (data.success && data.validated) {
+        setCurrentStep('preview')
+      } else if (data.needsValidation) {
+        // New script needs validation again
+        setValidationFeedback('') // Reset feedback
+        // Stay on validation step
+      } else if (data.needsClarification) {
+        setCurrentStep('clarification')
       }
     } catch (error) {
       setGenerationResult({
@@ -166,9 +216,16 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   // Navigation helpers
   const goBack = () => {
     if (currentStep === 'clarification') setCurrentStep('input')
+    if (currentStep === 'validation') setCurrentStep('input')
     if (currentStep === 'preview') {
-      const prevStep = generationResult?.needsClarification ? 'clarification' : 'input'
-      setCurrentStep(prevStep)
+      // Determine previous step based on generation result
+      if (generationResult?.needsValidation) {
+        setCurrentStep('validation')
+      } else if (generationResult?.needsClarification) {
+        setCurrentStep('clarification')
+      } else {
+        setCurrentStep('input')
+      }
     }
     if (currentStep === 'execution') setCurrentStep('preview')
   }
@@ -180,6 +237,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     setGenerationResult(null)
     setExecutionResult(null)
     setClarificationAnswers({})
+    setValidationFeedback('')
   }
 
   // Helper function to provide intelligent error suggestions
@@ -252,7 +310,12 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     
     // Add clarification step if needed
     if (generationResult?.needsClarification || currentStep === 'clarification') {
-      baseSteps.push({ id: 'clarification', label: 'Clarification', completed: ['preview', 'execution'].includes(currentStep) })
+      baseSteps.push({ id: 'clarification', label: 'Clarification', completed: ['validation', 'preview', 'execution'].includes(currentStep) })
+    }
+    
+    // Add validation step if needed
+    if (generationResult?.needsValidation || currentStep === 'validation') {
+      baseSteps.push({ id: 'validation', label: 'Validate Sample', completed: ['preview', 'execution'].includes(currentStep) })
     }
     
     baseSteps.push(
@@ -683,6 +746,102 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
     </div>
   )
 
+  const renderValidationStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">🔍 Validate Sample Data</h2>
+          <p className="text-gray-600">
+            We extracted a sample from the website. Please check if this is the correct data you want to scrape.
+          </p>
+        </div>
+
+        {/* Show test results */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">📊 Micro-test Results</h3>
+          <p className="text-sm text-blue-700">
+            Found {generationResult?.testResult?.totalFound || 0} items in {((generationResult?.testResult?.executionTime || 0) / 1000).toFixed(1)}s
+          </p>
+        </div>
+
+        {/* Show sample data */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-3">Sample Data:</h3>
+          <div className="bg-gray-50 border rounded-lg p-4 max-h-96 overflow-auto">
+            {generationResult?.sampleData && generationResult.sampleData.length > 0 ? (
+              <pre className="text-sm text-gray-800 whitespace-pre-wrap">
+                {JSON.stringify(generationResult.sampleData, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-gray-500 italic">No sample data available</p>
+            )}
+          </div>
+        </div>
+
+        {/* Feedback input */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            If this data is incorrect, please describe what you want instead:
+          </label>
+          <textarea
+            value={validationFeedback}
+            onChange={(e) => setValidationFeedback(e.target.value)}
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+            rows={3}
+            placeholder="e.g., 'This extracted navigation menu items, but I want actual restaurant listings with names and addresses'"
+          />
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex justify-between items-center">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Prompt
+          </button>
+
+          <div className="flex space-x-3">
+            <button
+              onClick={() => handleValidation(false)}
+              disabled={isGenerating}
+              className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  ❌ This is Wrong - Regenerate
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleValidation(true)}
+              disabled={isGenerating}
+              className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  ✅ This Looks Correct - Continue
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   const renderExecutionStep = () => (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-6">
@@ -836,6 +995,7 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         {currentStep === 'input' && renderInputStep()}
         {currentStep === 'clarification' && renderClarificationStep()}
+        {currentStep === 'validation' && renderValidationStep()}
         {currentStep === 'preview' && renderPreviewStep()}
         {currentStep === 'execution' && renderExecutionStep()}
       </div>

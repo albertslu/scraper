@@ -44,7 +44,41 @@ export async function POST(request: NextRequest) {
     // Test the script first (Canvas approach)
     const testResults = await orchestrator.testAndClarify(codegenJob, scrapingRequest)
 
-    if (!testResults.shouldProceed) {
+    if (testResults.needsValidation) {
+      console.log('🔍 Micro-test found data - showing to user for validation')
+      
+      // Save the script for potential use after validation
+      const savedScript = await db.createScraperScript({
+        title: `${codegenJob.title} (Needs Validation)`,
+        prompt: prompt,
+        url: url,
+        generated_code: codegenJob.script.code,
+        requirements: codegenJob.requirements,
+        tool_type: codegenJob.script.toolType,
+        output_schema: codegenJob.requirements.outputFields,
+        explanation: codegenJob.script.explanation,
+        dependencies: codegenJob.script.dependencies
+      })
+
+      // Create job linked to the script
+      const job = await db.createScrapingJob(url, {
+        prompt: prompt,
+        title: codegenJob.title,
+        script_id: savedScript.id
+      })
+
+      return NextResponse.json({
+        success: false, // Don't auto-proceed to execution
+        needsValidation: true,
+        jobId: job.id,
+        scriptId: savedScript.id,
+        title: codegenJob.title,
+        code: codegenJob.script.code,
+        explanation: codegenJob.script.explanation,
+        testResult: testResults.testResult,
+        sampleData: testResults.testResult.data || []
+      })
+    } else if (!testResults.shouldProceed) {
       console.log('🤔 Test failed, returning clarifying questions to user')
       
       // Save the script for potential use after clarification

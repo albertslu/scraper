@@ -390,6 +390,7 @@ export class CodegenOrchestrator {
       reasoning: string;
     };
     shouldProceed: boolean;
+    needsValidation?: boolean;
   }> {
     if (!job.script || !job.requirements) {
       throw new Error('Job must have script and requirements to test');
@@ -406,10 +407,13 @@ export class CodegenOrchestrator {
       });
       
       if (testResult.success && testResult.totalFound > 0) {
-        console.log(`✅ Test passed: Found ${testResult.totalFound} items`);
+        console.log(`✅ Test found ${testResult.totalFound} items - showing to user for validation`);
+        
+        // Always show results to user for validation (no auto-proceed)
         return {
           testResult,
-          shouldProceed: true
+          shouldProceed: false,
+          needsValidation: true
         };
       } else {
         console.log(`⚠️ Test failed: Found ${testResult.totalFound} items`);
