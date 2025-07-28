@@ -526,7 +526,9 @@ executeScript().catch(error => {
       })
       // Convert default imports to CommonJS
       .replace(/import\s+(\w+)\s+from\s+(['"'][^'"]+['"])/g, 'const $1 = require($2);')
-      // Convert export async function main to module.exports
+      // Convert export async function main to module.exports (remove return types)
+      .replace(/export\s+async\s+function\s+main\s*\([^)]*\)\s*:\s*[^{]+\{/g, 'async function main() {')
+      .replace(/export\s+function\s+main\s*\([^)]*\)\s*:\s*[^{]+\{/g, 'function main() {')
       .replace(/export\s+async\s+function\s+main\s*\(/g, 'async function main(')
       .replace(/export\s+function\s+main\s*\(/g, 'function main(')
       // Add module.exports at the end
