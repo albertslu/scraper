@@ -26,7 +26,7 @@ export class ExecutionModule {
       timeout: config.timeout || 600000, // 10 minutes default
       outputFormat: config.outputFormat || 'json',
       maxItems: config.maxItems || 1000,
-      sandboxDir: config.sandboxDir || (process.env.VERCEL ? '/tmp/sandbox' : join(tmpdir(), 'scraper-sandbox')),
+      sandboxDir: config.sandboxDir || (process.env.VERCEL ? '/tmp/sandbox' : join(process.cwd(), 'sandbox')),
       testMode: config.testMode || false,
       retryContext: config.retryContext || null
     };
@@ -80,22 +80,43 @@ export class ExecutionModule {
       writeFileSync(jsPath, jsCode);
       console.log('✅ TypeScript compiled to JavaScript');
       
-      // Execute with NODE_PATH pointing to our node_modules
+      // Execute CommonJS script with NODE_PATH set to find modules
       const nodeModulesPath = join(process.cwd(), 'node_modules');
-      console.log(`📍 Setting NODE_PATH to: ${nodeModulesPath}`);
+      console.log(`🏃 Executing CommonJS script: ${jsPath}`);
+      console.log(`📦 NODE_PATH: ${nodeModulesPath}`);
+      
+      // Create a wrapper script to call the main function
+      const wrapperCode = `
+const { main } = require('${jsPath}');
+main().then(result => {
+  console.log('=== EXECUTION_RESULT_START ===');
+  console.log(JSON.stringify({ success: true, data: result }));
+  console.log('=== EXECUTION_RESULT_END ===');
+}).catch(error => {
+  console.log('=== EXECUTION_RESULT_START ===');
+  console.log(JSON.stringify({ success: false, error: error.message, stack: error.stack }));
+  console.log('=== EXECUTION_RESULT_END ===');
+});
+      `;
+      
+      const wrapperPath = jsPath.replace('.js', '.wrapper.js');
+      writeFileSync(wrapperPath, wrapperCode);
       
       const { stdout, stderr } = await execAsync(
-        `node ${jsPath}`,
+        `node ${wrapperPath}`,
         { 
           timeout: execConfig.timeout,
           cwd: process.cwd(),
-          env: { 
-            ...process.env, 
-            NODE_PATH: nodeModulesPath 
+          env: {
+            ...process.env,
+            NODE_PATH: nodeModulesPath
           },
           maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         }
       );
+      
+      // Clean up wrapper
+      this.cleanup(wrapperPath);
       
       // Clean up JS file
       this.cleanup(jsPath);
@@ -490,18 +511,26 @@ executeScript().catch(error => {
   private async compileTypeScriptToJavaScript(tsPath: string): Promise<string> {
     const tsCode = readFileSync(tsPath, 'utf-8');
     
-    // Basic TypeScript to JavaScript transpilation
+    // Basic TypeScript to JavaScript transpilation + ES6 to CommonJS conversion
     let jsCode = tsCode
       // Remove type annotations from imports
       .replace(/import\s+type\s+\{[^}]+\}\s+from\s+['"'][^'"]+['"];?\s*/g, '')
+      // Convert ES6 imports to CommonJS requires
       .replace(/import\s+\{([^}]+)\}\s+from\s+(['"'][^'"]+['"])/g, (match, imports, module) => {
         // Remove type-only imports
         const cleanImports = imports.split(',')
           .map((imp: string) => imp.trim())
           .filter((imp: string) => !imp.includes('type '))
           .join(', ');
-        return cleanImports ? `import { ${cleanImports} } from ${module}` : '';
+        return cleanImports ? `const { ${cleanImports} } = require(${module});` : '';
       })
+      // Convert default imports to CommonJS
+      .replace(/import\s+(\w+)\s+from\s+(['"'][^'"]+['"])/g, 'const $1 = require($2);')
+      // Convert export async function main to module.exports
+      .replace(/export\s+async\s+function\s+main\s*\(/g, 'async function main(')
+      .replace(/export\s+function\s+main\s*\(/g, 'function main(')
+      // Add module.exports at the end
+      + '\n\nmodule.exports = { main };'
       // Remove type annotations from variables and parameters
       .replace(/:\s*[A-Za-z][A-Za-z0-9<>\[\]|&\s]*(?=\s*[=,\)\{])/g, '')
       // Remove interface declarations
@@ -518,16 +547,9 @@ executeScript().catch(error => {
    * Ensure sandbox directory exists
    */
   private ensureSandboxDirectory(): void {
-    try {
-      if (!existsSync(this.tempDir)) {
-        mkdirSync(this.tempDir, { recursive: true });
-        console.log(`📁 Created sandbox directory: ${this.tempDir}`);
-      }
-    } catch (error) {
-      console.error(`❌ Failed to create sandbox directory: ${this.tempDir}`, error);
-      // Fallback to system temp directory
-      this.tempDir = tmpdir();
-      console.log(`📁 Falling back to system temp directory: ${this.tempDir}`);
+    if (!existsSync(this.tempDir)) {
+      mkdirSync(this.tempDir, { recursive: true });
+      console.log(`📁 Created sandbox directory: ${this.tempDir}`);
     }
   }
 
