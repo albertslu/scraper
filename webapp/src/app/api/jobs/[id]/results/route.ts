@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/supabase'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {

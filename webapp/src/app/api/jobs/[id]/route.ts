@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/supabase'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -56,7 +56,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const jobId = params.id
+    const { id } = await params
+    const jobId = id
     const updates = await request.json()
 
     if (!jobId) {

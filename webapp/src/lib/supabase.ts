@@ -39,7 +39,7 @@ export interface ScraperScript {
   url: string
   generated_code: string
   requirements: any // JSONB
-  tool_type: 'stagehand' | 'playwright' | 'hybrid'
+  tool_type: 'stagehand' | 'playwright' | 'hybrid' | 'playwright-stealth'
   output_schema: any // JSONB
   created_at: string
   updated_at: string

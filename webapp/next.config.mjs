@@ -1,11 +1,15 @@
-import type { NextConfig } from "next";
 import { config } from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables from the root .env file
 config({ path: path.resolve(__dirname, '../.env') });
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   /* config options here */
   eslint: {
     // Warning: This allows production builds to successfully complete even if

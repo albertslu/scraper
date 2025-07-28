@@ -86,7 +86,7 @@ export function JobsHistory() {
       
       const job = jobs.find(j => j.id === jobId)
       if (job) {
-        setSelectedJob({ ...job, companies: data.companies })
+        setSelectedJob({ ...job, companies: data.companies } as any)
       }
     } catch (err) {
       console.error('Failed to fetch job details:', err)
@@ -262,7 +262,7 @@ export function JobsHistory() {
                 </p>
               </div>
 
-              {selectedJob.companies && selectedJob.companies.length > 0 ? (
+              {(selectedJob as any).companies && (selectedJob as any).companies.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -274,7 +274,7 @@ export function JobsHistory() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedJob.companies.map((company: any) => (
+                                              {(selectedJob as any).companies.map((company: any) => (
                         <tr key={company.id}>
                           <td className="px-4 py-2 text-sm text-gray-900">{company.name}</td>
                           <td className="px-4 py-2 text-sm text-gray-600">{company.phone || 'N/A'}</td>
