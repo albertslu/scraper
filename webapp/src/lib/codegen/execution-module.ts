@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { GeneratedScript, ExecutionResult } from './types';
@@ -75,65 +75,25 @@ export class ExecutionModule {
       // Create JavaScript version for more reliable execution
       const jsPath = scriptPath.replace('.ts', '.js');
       
-      try {
-        // First try TypeScript compilation with proper module resolution
-        await execAsync(`npx tsc ${scriptPath} --outDir ${this.tempDir} --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --allowJs --resolveJsonModule`, {
-          timeout: 30000,
-          cwd: process.cwd()
-        });
-        
-        // Then execute the compiled JavaScript
-        const { stdout, stderr } = await execAsync(
-          `node ${jsPath}`,
-          { 
-            timeout: execConfig.timeout,
-            cwd: process.cwd(),
-            maxBuffer: 10 * 1024 * 1024 // 10MB buffer
-          }
-        );
-        
-        // Clean up JS file
-        this.cleanup(jsPath);
-        
-        return this.handleExecutionResult(stdout, stderr, execConfig, startTime, scriptPath);
-        
-      } catch (compileError) {
-        console.warn('⚠️ TypeScript compilation failed, trying direct ts-node execution...');
-        
-        try {
-          // Fallback to ts-node with more permissive options and proper module resolution
-          const { stdout, stderr } = await execAsync(
-            `npx ts-node --transpile-only --skip-project --esm --experimentalSpecifierResolution=node ${scriptPath}`,
-            { 
-              timeout: execConfig.timeout,
-              cwd: process.cwd(),
-              maxBuffer: 10 * 1024 * 1024 // 10MB buffer
-            }
-          );
-          
-          return this.handleExecutionResult(stdout, stderr, execConfig, startTime, scriptPath);
-          
-        } catch (tsNodeError) {
-          console.warn('⚠️ ts-node execution failed, trying direct JavaScript execution...');
-          
-          // Final fallback: check if there's already a JavaScript file we can execute
-          if (existsSync(jsPath)) {
-            const { stdout, stderr } = await execAsync(
-              `node ${jsPath}`,
-              { 
-                timeout: execConfig.timeout,
-                cwd: process.cwd(),
-                maxBuffer: 10 * 1024 * 1024 // 10MB buffer
-              }
-            );
-            
-            return this.handleExecutionResult(stdout, stderr, execConfig, startTime, scriptPath);
-          } else {
-            // If no JS file exists, throw the original error
-            throw tsNodeError;
-          }
+      // Always compile TypeScript to JavaScript for Vercel compatibility
+      const jsCode = await this.compileTypeScriptToJavaScript(scriptPath);
+      writeFileSync(jsPath, jsCode);
+      console.log('✅ TypeScript compiled to JavaScript');
+      
+      // Execute the compiled JavaScript
+      const { stdout, stderr } = await execAsync(
+        `node ${jsPath}`,
+        { 
+          timeout: execConfig.timeout,
+          cwd: process.cwd(),
+          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         }
-      }
+      );
+      
+      // Clean up JS file
+      this.cleanup(jsPath);
+      
+      return this.handleExecutionResult(stdout, stderr, execConfig, startTime, scriptPath);
 
     // This is now handled by handleExecutionResult method
 
@@ -514,6 +474,37 @@ executeScript().catch(error => {
     }
     
     return errorMessage;
+  }
+
+  /**
+   * Compile TypeScript to JavaScript using basic string replacement
+   * This is a simple transpilation for Vercel compatibility
+   */
+  private async compileTypeScriptToJavaScript(tsPath: string): Promise<string> {
+    const tsCode = readFileSync(tsPath, 'utf-8');
+    
+    // Basic TypeScript to JavaScript transpilation
+    let jsCode = tsCode
+      // Remove type annotations from imports
+      .replace(/import\s+type\s+\{[^}]+\}\s+from\s+['"'][^'"]+['"];?\s*/g, '')
+      .replace(/import\s+\{([^}]+)\}\s+from\s+(['"'][^'"]+['"])/g, (match, imports, module) => {
+        // Remove type-only imports
+        const cleanImports = imports.split(',')
+          .map((imp: string) => imp.trim())
+          .filter((imp: string) => !imp.includes('type '))
+          .join(', ');
+        return cleanImports ? `import { ${cleanImports} } from ${module}` : '';
+      })
+      // Remove type annotations from variables and parameters
+      .replace(/:\s*[A-Za-z][A-Za-z0-9<>\[\]|&\s]*(?=\s*[=,\)\{])/g, '')
+      // Remove interface declarations
+      .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
+      // Remove type assertions
+      .replace(/as\s+[A-Za-z][A-Za-z0-9<>\[\]|&\s]*/g, '')
+      // Remove type parameters from functions
+      .replace(/<[A-Za-z][A-Za-z0-9<>\[\]|&\s,]*>/g, '');
+    
+    return jsCode;
   }
 
   /**
