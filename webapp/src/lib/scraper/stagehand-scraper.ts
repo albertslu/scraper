@@ -13,6 +13,7 @@ export class StagehandBBBScraper {
     this.config = config;
     this.stagehand = new Stagehand({
       env: "LOCAL",
+      modelName: "claude-sonnet-4-20250514",
       domSettleTimeoutMs: 5000,
     });
   }
