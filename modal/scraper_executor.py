@@ -43,7 +43,7 @@ image = (
     timeout=600,  # 10 minutes
     memory=2048,  # 2GB RAM
     cpu=2.0,      # 2 CPU cores
-    secrets=[modal.Secret.from_name("scraper-secrets")]
+    secrets=[modal.Secret.from_name("scraper-secrets-v2")]
 )
 def execute_typescript_script(
     script_code: str,
@@ -148,6 +148,44 @@ def execute_typescript_script(
                     "playwright: {",
                     "playwright: { headless: true,"
                 )
+                
+                # Configure Stagehand with explicit LLM and BrowserBase configuration
+                anthropic_key = os.environ.get('ANTHROPIC_API_KEY', '')
+                browserbase_key = os.environ.get('BROWSERBASE_API_KEY', '')
+                browserbase_project = os.environ.get('BROWSERBASE_PROJECT_ID', '')
+                
+                # Build Stagehand config based on available credentials
+                if browserbase_key and browserbase_project:
+                     stagehand_config = f"""{{
+     env: "BROWSERBASE",
+     apiKey: process.env.BROWSERBASE_API_KEY || "{browserbase_key}",
+     projectId: process.env.BROWSERBASE_PROJECT_ID || "{browserbase_project}",
+     llmClient: {{
+       modelName: "claude-sonnet-4-20250514",
+       apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
+     }}"""
+                 else:
+                     stagehand_config = f"""{{
+     env: "LOCAL",
+     headless: true,
+     llmClient: {{
+       modelName: "claude-sonnet-4-20250514",
+       apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
+     }}"""
+                
+                stagehand_config_replacements = [
+                    # Pattern: new Stagehand({
+                    ("new Stagehand({", f"new Stagehand({stagehand_config}"),
+                    # Pattern: new Stagehand({ env: "LOCAL"
+                    ('new Stagehand({\n    env: "LOCAL"', f"new Stagehand({stagehand_config}"),
+                    # Pattern: Stagehand({ env: "LOCAL",
+                    ('Stagehand({\n    env: "LOCAL",', f"Stagehand({stagehand_config}")
+                ]
+                
+                for old_pattern, new_pattern in stagehand_config_replacements:
+                    if old_pattern in headless_script:
+                        headless_script = headless_script.replace(old_pattern, new_pattern)
+                        print(f"🔧 Applied Stagehand LLM configuration: {old_pattern}")
                 
                 # Also ensure DISPLAY environment variable handling
                 headless_script = f"""
