@@ -261,6 +261,91 @@ export async function main(): Promise<any[]> {
 - ALWAYS close browser in finally block
 - Use specific CSS selectors and DOM queries
 
+**PLAYWRIGHT-STEALTH TEMPLATE (Use this for anti-bot protected sites):**
+\`\`\`typescript
+import { chromium } from 'playwright';
+import { z } from 'zod';
+
+// Define your schema here
+const ItemSchema = z.object({
+  // Define fields based on requirements
+});
+
+export async function main(): Promise<any[]> {
+  // Launch with stealth settings
+  const browser = await chromium.launch({ 
+    headless: false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-web-security',
+      '--disable-features=site-per-process',
+      '--no-sandbox',
+      '--disable-setuid-sandbox'
+    ]
+  });
+  
+  try {
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      extraHTTPHeaders: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      }
+    });
+
+    // Remove webdriver property and other automation indicators
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5]
+      });
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en']
+      });
+      window.chrome = {
+        runtime: {}
+      };
+    });
+
+    const page = await context.newPage();
+    const results: any[] = [];
+    
+    console.log('🔍 Starting stealth scraping...');
+    
+    // Navigate with slower, human-like behavior
+    await page.goto('TARGET_URL_HERE', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    
+    // Random delay to mimic human behavior
+    await page.waitForTimeout(Math.random() * 3000 + 2000);
+    
+    // YOUR SCRAPING LOGIC: Include human-like delays between actions
+    // Add random mouse movements and scrolling
+    // Use longer timeouts and more patient waits
+    
+    console.log(\`✅ Scraped \${results.length} items\`);
+    return results;
+    
+  } catch (error) {
+    console.error('❌ Scraping failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+    console.log('✅ Browser closed');
+  }
+}
+\`\`\`
+
 **HYBRID TEMPLATE (Use this for Hybrid Playwright + Stagehand approach):**
 
 \`\`\`typescript

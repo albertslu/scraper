@@ -34,7 +34,7 @@ export const ScrapingRequirementsSchema = z.object({
     description: z.string().describe("What this field contains")
   })).describe("Expected output schema fields"),
   complexity: z.enum(['simple', 'medium', 'complex']).describe("Scraping complexity level"),
-  toolRecommendation: z.enum(['stagehand', 'playwright', 'hybrid']).describe("Recommended scraping tool"),
+  toolRecommendation: z.enum(['stagehand', 'playwright', 'hybrid', 'playwright-stealth']).describe("Recommended scraping tool"),
   reasoning: z.string().describe("Why this tool was recommended")
 });
 
@@ -44,7 +44,7 @@ export type ScrapingRequirements = z.infer<typeof ScrapingRequirementsSchema>;
 export interface GeneratedScript {
   id: string;
   requirements: ScrapingRequirements;
-  toolType: 'stagehand' | 'playwright' | 'hybrid';
+  toolType: 'stagehand' | 'playwright' | 'hybrid' | 'playwright-stealth';
   code: string;
   testCode: string; // Code for single-item testing
   fullCode: string; // Code for full scraping
@@ -157,7 +157,7 @@ export const SiteSpecSchema = z.object({
   })),
 
   // Tool recommendation
-  tool_choice: z.enum(['stagehand', 'playwright', 'hybrid']),
+  tool_choice: z.enum(['stagehand', 'playwright', 'hybrid', 'playwright-stealth']),
   tool_reasoning: z.string(),
 
   // API endpoints (if detected)
