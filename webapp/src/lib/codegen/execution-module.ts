@@ -80,12 +80,19 @@ export class ExecutionModule {
       writeFileSync(jsPath, jsCode);
       console.log('✅ TypeScript compiled to JavaScript');
       
-      // Execute the compiled JavaScript
+      // Execute with NODE_PATH pointing to our node_modules
+      const nodeModulesPath = join(process.cwd(), 'node_modules');
+      console.log(`📍 Setting NODE_PATH to: ${nodeModulesPath}`);
+      
       const { stdout, stderr } = await execAsync(
         `node ${jsPath}`,
         { 
           timeout: execConfig.timeout,
           cwd: process.cwd(),
+          env: { 
+            ...process.env, 
+            NODE_PATH: nodeModulesPath 
+          },
           maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         }
       );
