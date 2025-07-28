@@ -85,6 +85,12 @@ export interface ExecutionResult {
     outputFormat?: string;
     csvOutput?: string;
     isPartialResult?: boolean;
+    modalExecution?: boolean;
+    testMode?: boolean;
+    originalCount?: number;
+    limited?: boolean;
+    error?: string;
+    [key: string]: any; // Allow additional properties
   };
 }
 

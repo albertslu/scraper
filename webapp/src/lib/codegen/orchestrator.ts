@@ -1,7 +1,7 @@
 import { createPromptParser } from './prompt-parser';
 import { createCodeGenerator } from './code-generator';
 import { createRefinementEngine, RefinementContext } from './refinement-engine';
-import { createExecutionModule, ExecutionConfig } from './execution-module';
+import { createModalExecutionModule, ExecutionConfig } from './modal-execution-module';
 
 import { createPreflightAnalyzer } from './preflight-analyzer';
 import { ScrapingRequest, CodegenJob, GeneratedScript } from './types';
@@ -17,7 +17,7 @@ export class CodegenOrchestrator {
   private promptParser = createPromptParser();
   private codeGenerator = createCodeGenerator();
   private refinementEngine = createRefinementEngine();
-  private executionModule = createExecutionModule();
+  private executionModule = createModalExecutionModule();
 
   private preflightAnalyzer = createPreflightAnalyzer();
   private config: Required<OrchestratorConfig>;
