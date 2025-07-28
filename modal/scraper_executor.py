@@ -164,7 +164,7 @@ def execute_typescript_script(
        modelName: "claude-sonnet-4-20250514",
        apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
      }}"""
-                 else:
+                else:
                      stagehand_config = f"""{{
      env: "LOCAL",
      headless: true,
@@ -173,19 +173,32 @@ def execute_typescript_script(
        apiKey: process.env.ANTHROPIC_API_KEY || "{anthropic_key}"
      }}"""
                 
-                stagehand_config_replacements = [
-                    # Pattern: new Stagehand({
-                    ("new Stagehand({", f"new Stagehand({stagehand_config}"),
-                    # Pattern: new Stagehand({ env: "LOCAL"
-                    ('new Stagehand({\n    env: "LOCAL"', f"new Stagehand({stagehand_config}"),
-                    # Pattern: Stagehand({ env: "LOCAL",
-                    ('Stagehand({\n    env: "LOCAL",', f"Stagehand({stagehand_config}")
-                ]
+                # Simple and reliable approach: just ensure environment variables are set
+                # and use the simplest Stagehand configuration that actually works
+                print("🔧 Applying simple Stagehand configuration with Claude 4...")
                 
-                for old_pattern, new_pattern in stagehand_config_replacements:
-                    if old_pattern in headless_script:
-                        headless_script = headless_script.replace(old_pattern, new_pattern)
-                        print(f"🔧 Applied Stagehand LLM configuration: {old_pattern}")
+                # Replace Stagehand configurations with the working pattern
+                import re
+                
+                # Pattern 1: new Stagehand({ ... }) - replace with simple config
+                pattern1 = r'new Stagehand\(\{[^}]*\}\)'
+                if re.search(pattern1, headless_script):
+                    simple_config = '''new Stagehand({
+    env: "LOCAL",
+    modelName: "claude-sonnet-4-20250514"
+})'''
+                    headless_script = re.sub(pattern1, simple_config, headless_script)
+                    print(f"✅ Applied simple Stagehand configuration")
+                
+                # Pattern 2: Also handle cases where it's just Stagehand({ without new
+                pattern2 = r'(?<!new\s)Stagehand\(\{[^}]*\}\)'
+                if re.search(pattern2, headless_script):
+                    simple_config2 = '''Stagehand({
+    env: "LOCAL", 
+    modelName: "claude-sonnet-4-20250514"
+})'''
+                    headless_script = re.sub(pattern2, simple_config2, headless_script)
+                    print(f"✅ Applied simple Stagehand configuration (pattern 2)")
                 
                 # Also ensure DISPLAY environment variable handling
                 headless_script = f"""
