@@ -95,7 +95,7 @@ def execute_typescript_script(
                 }
             }
             
-            # Add specific dependencies based on tool type
+            # Add specific dependencies based on tool type and requested deps
             for dep in dependencies:
                 if dep == "@browserbasehq/stagehand":
                     package_json["dependencies"]["@browserbasehq/stagehand"] = "^1.7.0"
@@ -110,6 +110,13 @@ def execute_typescript_script(
                 elif dep == "uuid":
                     package_json["dependencies"]["uuid"] = "^10.0.0"
                     package_json["dependencies"]["@types/uuid"] = "^10.0.0"
+
+            # Safety net: if tool_type indicates Stagehand, ensure core deps even if not explicitly listed
+            if tool_type.lower().startswith("stagehand") or "@browserbasehq/stagehand" in str(dependencies):
+                package_json["dependencies"].setdefault("@browserbasehq/stagehand", "^1.7.0")
+                package_json["dependencies"].setdefault("zod", "^3.23.8")
+                package_json["dependencies"].setdefault("@anthropic-ai/sdk", "^0.29.0")
+                package_json["dependencies"].setdefault("openai", "^4.56.0")
             
             print(f"📝 Writing package.json: {package_json}")
             with open(package_json_path, 'w') as f:
@@ -200,7 +207,13 @@ process.env.DISPLAY = ':99';
             browser_packages = ["playwright", "@browserbasehq/stagehand", "puppeteer"]
             stealth_packages = ["playwright-stealth", "playwright-extra", "puppeteer-stealth", "puppeteer-extra"]
             
-            needs_browsers = any(pkg in str(dependencies) for pkg in browser_packages)
+            # Determine if browser binaries are needed.
+            # Consider both requested dependencies and tool_type for robustness.
+            needs_browsers = (
+                any(pkg in str(dependencies) for pkg in browser_packages)
+                or tool_type.lower().startswith("stagehand")
+                or tool_type.lower().startswith("playwright")
+            )
             needs_stealth = any(pkg in str(dependencies) for pkg in stealth_packages)
             
             if needs_browsers:
