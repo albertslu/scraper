@@ -103,6 +103,8 @@ def execute_typescript_script(
                     # based on available env vars and selected model names
                     package_json["dependencies"]["@anthropic-ai/sdk"] = "^0.29.0"
                     package_json["dependencies"]["openai"] = "^4.56.0"
+                    # Ensure playwright is available for browser installation/runtime
+                    package_json["dependencies"]["playwright"] = "^1.48.2"
                 elif dep == "playwright":
                     package_json["dependencies"]["playwright"] = "^1.48.2"
                 elif dep == "zod":
@@ -117,6 +119,7 @@ def execute_typescript_script(
                 package_json["dependencies"].setdefault("zod", "^3.23.8")
                 package_json["dependencies"].setdefault("@anthropic-ai/sdk", "^0.29.0")
                 package_json["dependencies"].setdefault("openai", "^4.56.0")
+                package_json["dependencies"].setdefault("playwright", "^1.48.2")
             
             print(f"📝 Writing package.json: {package_json}")
             with open(package_json_path, 'w') as f:
@@ -287,6 +290,9 @@ process.env.DISPLAY = ':99';
             env["NODE_PATH"] = str(temp_path / "node_modules")
             env["MAX_ITEMS"] = str(max_items)
             env["TEST_MODE"] = str(test_mode).lower()
+            # Ensure DISPLAY exists for any browser automation
+            if "DISPLAY" not in env:
+                env["DISPLAY"] = ":99"
             
             # Set up LLM API keys for Stagehand and other tools
             # Set up API keys from Modal environment variables
@@ -338,7 +344,7 @@ process.env.DISPLAY = ':99';
             print(f"🔑 API keys configured for Stagehand")
             
             # Use xvfb-run for Stagehand as it needs virtual display even in headless mode
-            if "@browserbasehq/stagehand" in dependencies:
+            if "@browserbasehq/stagehand" in dependencies or tool_type.lower().startswith("stagehand"):
                 print("🎭 Running Stagehand with virtual display (xvfb-run)")
                 exec_command = ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24", "npx", "ts-node", "scraper.ts"]
             else:
