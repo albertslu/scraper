@@ -3,11 +3,13 @@ import { authenticateExternalApi } from '@/lib/api/auth'
 import { createOrchestrator } from '@/lib/codegen/orchestrator'
 import { db } from '@/lib/supabase'
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest) {
   const auth = authenticateExternalApi(req.headers.get('authorization'))
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 401 })
 
-  const jobId = params.id
+  const match = req.url.match(/\/api\/v1\/jobs\/([^/]+)/)
+  const jobId = match?.[1]
+  if (!jobId) return NextResponse.json({ error: 'Missing job id' }, { status: 400 })
   const { timeout_ms = 300000, max_items = 1000 } = await req.json().catch(() => ({}))
 
   const result = await db.getJobWithScript(jobId)
