@@ -153,23 +153,8 @@ process.env.DISPLAY = ':99';
 """
                 print("✅ Stagehand environment configured")
 
-                # Inject LLM client wiring to avoid "No LLM API key" errors
-                # This prepends imports and creates a shared __llmClient based on available env vars.
-                # Then it ensures every Stagehand constructor receives llmClient unless already provided.
-                llm_injection = (
-                    "import Anthropic from '@anthropic-ai/sdk';\n"
-                    "import OpenAI from 'openai';\n"
-                    "const __llmClient = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : (process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : undefined);\n"
-                )
-
-                if 'llmClient' not in headless_script:
-                    # Prepend imports and helper
-                    headless_script = llm_injection + "\n" + headless_script
-                    # Add llmClient to all Stagehand constructors
-                    headless_script = headless_script.replace(
-                        "new Stagehand({",
-                        "new Stagehand({ llmClient: __llmClient,"
-                    )
+                # Do NOT inject a custom llmClient; let Stagehand auto-detect based on env + installed SDKs.
+                # We already ensure provider SDKs are installed and API keys are forwarded.
             
             # Handle hybrid mode scripts that might use both tools
             if "hybrid" in tool_type.lower() or ("stagehand" in str(dependencies) and "playwright" in str(dependencies)):
