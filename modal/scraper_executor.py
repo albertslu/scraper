@@ -126,6 +126,14 @@ def execute_typescript_script(
                 package_json["dependencies"].setdefault("playwright", "^1.48.2")
                 # Include zod for schema usage in most scripts
                 package_json["dependencies"].setdefault("zod", "^3.23.8")
+
+            # Safety net: if tool_type indicates Hybrid, ensure both tool deps are present
+            if tool_type.lower().startswith("hybrid"):
+                package_json["dependencies"].setdefault("playwright", "^1.48.2")
+                package_json["dependencies"].setdefault("@browserbasehq/stagehand", "^1.7.0")
+                package_json["dependencies"].setdefault("zod", "^3.23.8")
+                package_json["dependencies"].setdefault("@anthropic-ai/sdk", "^0.29.0")
+                package_json["dependencies"].setdefault("openai", "^4.56.0")
             
             print(f"📝 Writing package.json: {package_json}")
             with open(package_json_path, 'w') as f:
@@ -222,6 +230,7 @@ process.env.DISPLAY = ':99';
                 any(pkg in str(dependencies) for pkg in browser_packages)
                 or tool_type.lower().startswith("stagehand")
                 or tool_type.lower().startswith("playwright")
+                or tool_type.lower().startswith("hybrid")
             )
             needs_stealth = any(pkg in str(dependencies) for pkg in stealth_packages)
             
@@ -349,9 +358,14 @@ process.env.DISPLAY = ':99';
 
             print(f"🔑 API keys configured for Stagehand")
             
-            # Use xvfb-run for Stagehand as it needs virtual display even in headless mode
-            if "@browserbasehq/stagehand" in dependencies or tool_type.lower().startswith("stagehand"):
-                print("🎭 Running Stagehand with virtual display (xvfb-run)")
+            # Use xvfb-run to provide a virtual display for browser automation
+            if (
+                "@browserbasehq/stagehand" in dependencies
+                or tool_type.lower().startswith("stagehand")
+                or tool_type.lower().startswith("playwright")
+                or tool_type.lower().startswith("hybrid")
+            ):
+                print("🎭 Running with virtual display (xvfb-run)")
                 exec_command = ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24", "npx", "ts-node", "scraper.ts"]
             else:
                 exec_command = ["npx", "ts-node", "scraper.ts"]
