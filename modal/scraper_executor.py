@@ -120,6 +120,12 @@ def execute_typescript_script(
                 package_json["dependencies"].setdefault("@anthropic-ai/sdk", "^0.29.0")
                 package_json["dependencies"].setdefault("openai", "^4.56.0")
                 package_json["dependencies"].setdefault("playwright", "^1.48.2")
+
+            # Safety net: if tool_type indicates Playwright, ensure playwright is present
+            if tool_type.lower().startswith("playwright"):
+                package_json["dependencies"].setdefault("playwright", "^1.48.2")
+                # Include zod for schema usage in most scripts
+                package_json["dependencies"].setdefault("zod", "^3.23.8")
             
             print(f"📝 Writing package.json: {package_json}")
             with open(package_json_path, 'w') as f:
