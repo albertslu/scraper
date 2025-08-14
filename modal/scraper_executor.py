@@ -99,6 +99,10 @@ def execute_typescript_script(
             for dep in dependencies:
                 if dep == "@browserbasehq/stagehand":
                     package_json["dependencies"]["@browserbasehq/stagehand"] = "^1.7.0"
+                    # Ensure LLM provider SDKs are present so Stagehand can auto-create clients
+                    # based on available env vars and selected model names
+                    package_json["dependencies"]["@anthropic-ai/sdk"] = "^0.29.0"
+                    package_json["dependencies"]["openai"] = "^4.56.0"
                 elif dep == "playwright":
                     package_json["dependencies"]["playwright"] = "^1.48.2"
                 elif dep == "zod":
@@ -292,6 +296,29 @@ process.env.DISPLAY = ':99';
                 else:
                     print(f"⚠️ {var} not found in Modal environment")
             
+            # Validate that at least one LLM key is present (Stagehand requires this)
+            has_openai = bool(env.get("OPENAI_API_KEY"))
+            has_anthropic = bool(env.get("ANTHROPIC_API_KEY"))
+            if not (has_openai or has_anthropic):
+                missing_hint = "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY found in Modal secret/environment."
+                print(f"❌ LLM configuration missing. {missing_hint}")
+                return {
+                    "success": False,
+                    "data": [],
+                    "totalFound": 0,
+                    "errors": [
+                        "No LLM API key configured for Stagehand.",
+                        missing_hint,
+                        "Add one of these to the Modal secret 'scraper-secrets-v2': OPENAI_API_KEY or ANTHROPIC_API_KEY."
+                    ],
+                    "executionTime": int((time.time() - start_time) * 1000),
+                    "metadata": {
+                        "toolUsed": tool_type,
+                        "testMode": test_mode,
+                        "phase": "environment_validation"
+                    }
+                }
+
             print(f"🔑 API keys configured for Stagehand")
             
             # Use xvfb-run for Stagehand as it needs virtual display even in headless mode
