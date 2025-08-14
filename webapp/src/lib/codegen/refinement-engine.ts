@@ -123,31 +123,30 @@ export class RefinementEngine {
         model: "claude-opus-4-20250514",
         max_tokens: 2000,
         temperature: 0.3,
-        system: "You are an expert web scraping consultant. When scraping attempts fail, you ask intelligent clarifying questions to gather more information and improve the approach.",
+        system: "You are an expert web scraping consultant. The user cannot see the browser or the scraping session; they only see final results and error summaries. Ask simple, non-technical clarifying questions that a normal person can answer. Avoid code, CSS, or developer jargon. Prefer yes/no or multiple-choice questions with concise options. Use any provided context/logs to tailor questions (e.g., mention that nothing appeared on the page, or that a 'Load more' button might exist). Keep it to 2–4 questions, each focused on one idea, and make them actionable for refining the next attempt.",
         messages: [{
           role: "user",
           content: `A web scraping attempt failed with the following details:
 
-**Target:** ${requirements.target}
-**URL:** ${context || 'Not provided'}
-**Tool Used:** ${requirements.toolRecommendation}
-**Complexity:** ${requirements.complexity}
+TARGET: ${requirements.target}
+PRIMARY URL OR CONTEXT: ${context || 'Not provided'}
+TOOL USED: ${requirements.toolRecommendation}
+COMPLEXITY: ${requirements.complexity}
 
-**Errors Encountered:**
+ERRORS SEEN:
 ${errors.map(error => `- ${error}`).join('\n')}
 
-**Current Requirements:**
-${requirements.outputFields.map(field => 
-  `- ${field.name} (${field.type}): ${field.description}`
-).join('\n')}
+REQUESTED FIELDS:
+${requirements.outputFields.map(field => `- ${field.name} (${field.type}): ${field.description}`).join('\n')}
 
-Generate intelligent clarifying questions that will help diagnose the issue and improve the scraping approach. Focus on:
-1. Understanding the website structure better
-2. Identifying dynamic content or loading issues  
-3. Clarifying data extraction requirements
-4. Determining if authentication or special handling is needed
-
-Provide 2-4 targeted questions with helpful options where appropriate.`
+CRITICAL INSTRUCTIONS FOR QUESTIONS:
+- The user cannot see the browser/session; they only see final results and these error notes.
+- Ask simple, non-technical questions a normal person can answer.
+- Prefer yes/no, multiple-choice, or short text answers.
+- Make each question focused and actionable for the next attempt (e.g., confirm if there is a specific button to click, a login step, or a content area to scroll).
+- If relevant, refer to generic page elements (e.g., "Is there a 'Load more' button?", "Do you see filters or tabs you’d normally click?"), not CSS selectors.
+- Keep to 2–4 questions total.
+`
         }],
         tools: [{
           name: "generate_questions",
