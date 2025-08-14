@@ -17,12 +17,15 @@ export default function Home() {
     setSelectedJobId(jobId)
     setViewMode('results')
     setRefreshKey(prev => prev + 1)
-    // Update URL to /<jobId> without reloading
+    // Notify parent (admin) and update URL locally
     try {
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href)
         const newUrl = `${url.origin}/${jobId}`
         window.history.replaceState({}, '', newUrl)
+        if (window.parent) {
+          window.parent.postMessage({ type: 'scraper/jobSelected', jobId }, '*')
+        }
       }
     } catch {}
   }
@@ -30,12 +33,15 @@ export default function Home() {
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId)
     setViewMode('results')
-    // Update URL to /<jobId> without reloading
+    // Notify parent (admin) and update URL locally
     try {
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href)
         const newUrl = `${url.origin}/${jobId}`
         window.history.replaceState({}, '', newUrl)
+        if (window.parent) {
+          window.parent.postMessage({ type: 'scraper/jobSelected', jobId }, '*')
+        }
       }
     } catch {}
   }
