@@ -55,6 +55,9 @@ export default function Home() {
         const url = new URL(window.location.href)
         const newUrl = `${url.origin}/`
         window.history.replaceState({}, '', newUrl)
+        if (window.parent) {
+          window.parent.postMessage({ type: 'scraper/new' }, '*')
+        }
       }
     } catch {}
   }
