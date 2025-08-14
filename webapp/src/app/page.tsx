@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { GenerateWizard } from '@/components/GenerateWizard'
 import { JobSidebar } from '@/components/JobSidebar'
 import { FlexibleTable } from '@/components/FlexibleTable'
@@ -28,6 +28,17 @@ export default function Home() {
     setViewMode('wizard')
     setSelectedJobId(undefined)
   }
+
+  // Deep link support: if jobId is present in the query string, open results for that job
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const jobId = params.get('jobId')
+    if (jobId) {
+      setSelectedJobId(jobId)
+      setViewMode('results')
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
