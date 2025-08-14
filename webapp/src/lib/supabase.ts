@@ -179,16 +179,15 @@ export const db = {
     return data
   },
 
-  async getScrapingJobs(limit = 20, offset = 0): Promise<UnifiedJobResult[]> {
-    const { data, error } = await supabase
+  async getScrapingJobs(limit = 20, offset = 0): Promise<{ jobs: UnifiedJobResult[]; total: number }> {
+    const { data, error, count } = await supabase
       .from('unified_job_results')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(limit)
       .range(offset, offset + limit - 1)
 
     if (error) throw error
-    return data || []
+    return { jobs: data || [], total: count || 0 }
   },
 
   async getJobWithScript(jobId: string): Promise<{

@@ -32,6 +32,7 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
   const [limit] = useState(20)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
+  const [totalCount, setTotalCount] = useState<number | null>(null)
 
   useEffect(() => {
     // Reset pagination on refresh
@@ -56,6 +57,7 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
       
       const data = await response.json()
       const fetched: Job[] = data.jobs || []
+      if (typeof data.total === 'number') setTotalCount(data.total)
       setJobs(prev => (replace ? fetched : [...prev, ...fetched]))
       setOffset(nextOffset + fetched.length)
       setHasMore(fetched.length === pageLimit)
@@ -200,7 +202,7 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-gray-900">Scraping Jobs</h2>
           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-            {jobs.length} total
+            {totalCount ?? '…'} total
           </span>
         </div>
         

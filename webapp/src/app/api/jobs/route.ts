@@ -8,11 +8,11 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
 
     // Get unified job results (both legacy and flexible jobs)
-    const jobs = await db.getScrapingJobs(limit, offset)
+    const { jobs, total } = await db.getScrapingJobs(limit, offset)
     
     return NextResponse.json({ 
       jobs,
-      total: jobs.length,
+      total,
       limit,
       offset
     })
