@@ -31,7 +31,7 @@ export class RefinementEngine {
 
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-20250514",
         max_tokens: 8000,
         temperature: 0.2, // Slightly higher for creative problem solving
         system: systemPrompt,
@@ -120,7 +120,7 @@ export class RefinementEngine {
   }> {
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-20250514",
         max_tokens: 2000,
         temperature: 0.3,
         system: "You are an expert web scraping consultant. When scraping attempts fail, you ask intelligent clarifying questions to gather more information and improve the approach.",

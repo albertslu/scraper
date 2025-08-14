@@ -24,7 +24,7 @@ export class CodeGenerator {
 
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-20250514",
         max_tokens: 8000,
         temperature: 0.1,
         system: systemPrompt,

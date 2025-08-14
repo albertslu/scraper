@@ -30,7 +30,7 @@ export class CodeGenerator {
       console.log('--- PROMPT END ---');
       
       const response = await this.anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-20250514",
         max_tokens: 8000,
         temperature: 0.1,
         system: systemPrompt,
@@ -114,11 +114,23 @@ const ItemSchema = z.object({
 
 export async function main(): Promise<any[]> {
   // Initialize Stagehand
-  const stagehand = new Stagehand({
-    env: "LOCAL",
-    modelName: "claude-sonnet-4-20250514" as any,
-    domSettleTimeoutMs: 5000,
-  });
+  const isAnthropic = (process.env.ANTHROPIC_MODEL || '').startsWith('claude');
+
+  const stagehand = new Stagehand(
+    isAnthropic
+      ? {
+          env: "BROWSERBASE",
+          apiKey: process.env.BROWSERBASE_API_KEY,
+          projectId: process.env.BROWSERBASE_PROJECT_ID,
+          modelName: (process.env.ANTHROPIC_MODEL || "claude-opus-4-20250514") as any,
+          browserSettings: { stealth: true, solveCaptchas: true },
+        }
+      : {
+          env: "LOCAL",
+          modelName: (process.env.OPENAI_MODEL || "gpt-4o-mini") as any,
+          domSettleTimeoutMs: 5000,
+        }
+  );
   
   try {
     await stagehand.init();
@@ -242,8 +254,11 @@ export async function main(): Promise<any[]> {
 9. **Periodic Results**: For large datasets, output partial results every 10-20 items to handle timeouts gracefully
 
 **STAGEHAND SPECIFIC RULES:**
-- **For protected sites**: use \`new Stagehand({ env: "BROWSERBASE", apiKey: process.env.BROWSERBASE_API_KEY, projectId: process.env.BROWSERBASE_PROJECT_ID, modelName: "claude-sonnet-4-20250514" as any, browserSettings: { stealth: true, solveCaptchas: true } })\`
-- **For regular sites**: use \`new Stagehand({ env: "LOCAL", modelName: "claude-sonnet-4-20250514" as any, domSettleTimeoutMs: 5000 })\`
+- **Model-based env selection**:
+  - If using Anthropic (\`ANTHROPIC_MODEL\` starts with "claude"), use \`env: "BROWSERBASE"\` with \`BROWSERBASE_API_KEY\` and \`BROWSERBASE_PROJECT_ID\`.
+  - If using OpenAI (\`OPENAI_MODEL\`), use \`env: "LOCAL"\`.
+- Example Anthropic (Browserbase): \`new Stagehand({ env: "BROWSERBASE", apiKey: process.env.BROWSERBASE_API_KEY, projectId: process.env.BROWSERBASE_PROJECT_ID, modelName: (process.env.ANTHROPIC_MODEL || "claude-3-opus-latest") as any, browserSettings: { stealth: true, solveCaptchas: true } })\`
+- Example OpenAI (Local): \`new Stagehand({ env: "LOCAL", modelName: (process.env.OPENAI_MODEL || "gpt-4o-mini") as any, domSettleTimeoutMs: 5000 })\`
 - ALWAYS call \`await stagehand.init()\` before use
 - ALWAYS use \`const page = stagehand.page\` after init
 - ALWAYS call \`await stagehand.close()\` in finally block
@@ -392,7 +407,7 @@ export async function main(): Promise<any[]> {
     
     stagehand = new Stagehand({
       env: "LOCAL",
-      modelName: "claude-sonnet-4-20250514" as any,
+      modelName: (process.env.ANTHROPIC_MODEL || "claude-opus-4-20250514") as any,
       domSettleTimeoutMs: 5000,
     });
     

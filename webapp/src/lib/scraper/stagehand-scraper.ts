@@ -11,11 +11,21 @@ export class StagehandBBBScraper {
 
   constructor(config: ScraperConfig) {
     this.config = config;
-    this.stagehand = new Stagehand({
-      env: "LOCAL",
-      modelName: "claude-sonnet-4-20250514" as any,
-      domSettleTimeoutMs: 5000,
-    });
+    const isAnthropic = (process.env.ANTHROPIC_MODEL || '').startsWith('claude');
+    this.stagehand = new Stagehand(
+      isAnthropic
+        ? {
+            env: "BROWSERBASE",
+            apiKey: process.env.BROWSERBASE_API_KEY,
+            projectId: process.env.BROWSERBASE_PROJECT_ID,
+            modelName: (process.env.ANTHROPIC_MODEL || 'claude-opus-4-20250514') as any,
+          }
+        : {
+            env: "LOCAL",
+            modelName: (process.env.OPENAI_MODEL || 'gpt-4o-mini') as any,
+            domSettleTimeoutMs: 5000,
+          }
+    );
   }
 
   /**
