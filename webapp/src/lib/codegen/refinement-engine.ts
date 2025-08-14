@@ -31,7 +31,7 @@ export class RefinementEngine {
 
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
         temperature: 0.2, // Slightly higher for creative problem solving
         system: systemPrompt,
@@ -120,7 +120,7 @@ export class RefinementEngine {
   }> {
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 2000,
         temperature: 0.3,
         system: "You are an expert web scraping consultant. The user cannot see the browser or the scraping session; they only see final results and error summaries. Ask simple, non-technical clarifying questions that a normal person can answer. Avoid code, CSS, or developer jargon. Prefer yes/no or multiple-choice questions with concise options. Use any provided context/logs to tailor questions (e.g., mention that nothing appeared on the page, or that a 'Load more' button might exist). Keep it to 2–4 questions, each focused on one idea, and make them actionable for refining the next attempt.",

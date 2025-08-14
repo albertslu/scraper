@@ -807,7 +807,7 @@ export class PreflightAnalyzer {
     console.log('🧠 Running LLM analysis...');
     
     const response = await this.anthropic.messages.create({
-      model: "claude-opus-4-20250514",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       temperature: 0.1,
       system: this.getAnalysisSystemPrompt(retryContext),

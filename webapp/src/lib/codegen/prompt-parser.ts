@@ -23,7 +23,7 @@ export class PromptParser {
 
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 4000,
         temperature: 0.1,
         system: systemPrompt,
@@ -113,7 +113,7 @@ export class PromptParser {
   async generateJobTitle(request: ScrapingRequest): Promise<string> {
     try {
       const response = await this.anthropic.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 100,
         temperature: 0.3,
         system: "Generate a concise, descriptive title for a web scraping job based on the user's prompt. Keep it under 60 characters and make it specific.",

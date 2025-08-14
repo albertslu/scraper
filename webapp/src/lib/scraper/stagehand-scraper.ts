@@ -18,7 +18,7 @@ export class StagehandBBBScraper {
             env: "BROWSERBASE",
             apiKey: process.env.BROWSERBASE_API_KEY,
             projectId: process.env.BROWSERBASE_PROJECT_ID,
-            modelName: (process.env.ANTHROPIC_MODEL || 'claude-opus-4-20250514') as any,
+            modelName: (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514') as any,
           }
         : {
             env: "LOCAL",

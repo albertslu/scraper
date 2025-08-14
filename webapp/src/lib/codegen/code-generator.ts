@@ -30,7 +30,7 @@ export class CodeGenerator {
       console.log('--- PROMPT END ---');
       
       const response = await this.anthropic.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
         temperature: 0.1,
         system: systemPrompt,
@@ -122,7 +122,7 @@ export async function main(): Promise<any[]> {
           env: "BROWSERBASE",
           apiKey: process.env.BROWSERBASE_API_KEY,
           projectId: process.env.BROWSERBASE_PROJECT_ID,
-          modelName: (process.env.ANTHROPIC_MODEL || "claude-opus-4-20250514") as any,
+          modelName: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514") as any,
           browserSettings: { stealth: true, solveCaptchas: true },
         }
       : {
@@ -407,7 +407,7 @@ export async function main(): Promise<any[]> {
     
     stagehand = new Stagehand({
       env: "LOCAL",
-      modelName: (process.env.ANTHROPIC_MODEL || "claude-opus-4-20250514") as any,
+      modelName: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514") as any,
       domSettleTimeoutMs: 5000,
     });
     
