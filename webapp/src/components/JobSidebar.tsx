@@ -28,28 +28,49 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
   const [jobs, setJobs] = useState<Job[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [offset, setOffset] = useState(0)
+  const [limit] = useState(20)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
-    fetchJobs()
+    // Reset pagination on refresh
+    setJobs([])
+    setOffset(0)
+    setHasMore(true)
+    fetchJobs(0, limit, true)
   }, [refreshKey])
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (nextOffset = offset, pageLimit = limit, replace = false) => {
     try {
-      setIsLoading(true)
-      const response = await fetch('/api/jobs')
+      if (replace) {
+        setIsLoading(true)
+      } else {
+        setIsLoadingMore(true)
+      }
+      const response = await fetch(`/api/jobs?limit=${pageLimit}&offset=${nextOffset}`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch jobs')
       }
       
       const data = await response.json()
-      setJobs(data.jobs || [])
+      const fetched: Job[] = data.jobs || []
+      setJobs(prev => (replace ? fetched : [...prev, ...fetched]))
+      setOffset(nextOffset + fetched.length)
+      setHasMore(fetched.length === pageLimit)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setIsLoading(false)
+      setIsLoadingMore(false)
     }
+  }
+
+  const loadMore = () => {
+    if (!hasMore || isLoadingMore) return
+    fetchJobs(offset, limit, false)
   }
 
   const getStatusIcon = (status: string) => {
@@ -162,7 +183,7 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
           <p className="text-red-800 text-sm">Error loading jobs: {error}</p>
           <button
-            onClick={fetchJobs}
+            onClick={() => fetchJobs(0, limit, true)}
             className="mt-2 text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
           >
             Retry
@@ -282,10 +303,21 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <div className="text-xs text-gray-500 text-center">
-          <p>Total jobs: {jobs.length}</p>
-          <p>Completed: {jobs.filter(j => j.status === 'completed').length}</p>
+        <div className="text-xs text-gray-500 text-center mb-2">
+          <p>Total loaded: {jobs.length}</p>
+          <p>Completed loaded: {jobs.filter(j => j.status === 'completed').length}</p>
         </div>
+        {hasMore ? (
+          <button
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="w-full text-xs px-3 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-60"
+          >
+            {isLoadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        ) : (
+          <div className="text-xs text-gray-400 text-center">No more jobs</div>
+        )}
       </div>
     </div>
   )
