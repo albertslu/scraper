@@ -40,7 +40,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         explanation: result.script?.explanation,
         dependencies: result.script?.dependencies,
         script_id: result.script?.id,
-        script_version: result.script?.version
+        script_version: result.script?.version,
+        clarifying_context: (result as any).job?.clarifying_context
       }
     }
 

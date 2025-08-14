@@ -11,6 +11,7 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('wizard')
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [resumeContext, setResumeContext] = useState<any | null>(null)
 
   const handleJobComplete = (jobId: string) => {
     // Switch to results view and select the completed job
@@ -73,6 +74,26 @@ export default function Home() {
     if (jobId) {
       setSelectedJobId(jobId)
       setViewMode('results')
+
+      // Fetch job to detect clarifying context for resume
+      fetch(`/api/jobs/${jobId}`).then(async (r) => {
+        if (!r.ok) return
+        const data = await r.json()
+        const job = data.job
+        if (job?.clarifying_context) {
+          setResumeContext({
+            jobId,
+            scriptId: job.script_id,
+            clarifyingQuestions: job.clarifying_context.clarifyingQuestions,
+            testResult: job.clarifying_context.testResult,
+            code: job.clarifying_context.codePreview,
+            title: job.clarifying_context.title,
+            url: job.url,
+            prompt: job.prompt
+          })
+          setViewMode('wizard')
+        }
+      }).catch(() => {})
     }
   }, [])
 
@@ -106,7 +127,7 @@ export default function Home() {
         <div className="flex-1 flex flex-col bg-white">
           {viewMode === 'wizard' ? (
             <div className="flex-1 overflow-auto p-6">
-              <GenerateWizard onJobComplete={handleJobComplete} />
+              <GenerateWizard onJobComplete={handleJobComplete} resume={resumeContext || undefined} />
             </div>
           ) : selectedJobId ? (
             <FlexibleTable 

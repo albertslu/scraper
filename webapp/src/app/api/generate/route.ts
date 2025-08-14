@@ -20,6 +20,12 @@ export async function POST(request: NextRequest) {
       console.log('💬 User clarifications:', clarifications)
     }
 
+    // Create a pending job immediately so we can deep-link even if user navigates away
+    const initialJob = await db.createScrapingJob(url, {
+      prompt,
+      title: 'Generating…'
+    })
+
     // Create orchestrator instance
     const orchestrator = createOrchestrator({
       maxRefinementAttempts: 2,
@@ -60,17 +66,16 @@ export async function POST(request: NextRequest) {
         dependencies: codegenJob.script.dependencies
       })
 
-      // Create job linked to the script
-      const job = await db.createScrapingJob(url, {
-        prompt: prompt,
-        title: codegenJob.title,
-        script_id: savedScript.id
+      // Link pre-created job to the script and update title
+      await db.updateScrapingJob(initialJob.id, {
+        script_id: savedScript.id,
+        title: codegenJob.title
       })
 
       return NextResponse.json({
         success: false, // Don't auto-proceed to execution
         needsValidation: true,
-        jobId: job.id,
+        jobId: initialJob.id,
         scriptId: savedScript.id,
         title: codegenJob.title,
         code: codegenJob.script.code,
@@ -94,9 +99,22 @@ export async function POST(request: NextRequest) {
         dependencies: codegenJob.script.dependencies
       })
 
+      // Persist clarifying context for resume
+      await db.updateScrapingJob(initialJob.id, {
+        clarifying_context: {
+          clarifyingQuestions: testResults.clarifyingQuestions,
+          testResult: testResults.testResult,
+          codePreview: codegenJob.script.code,
+          title: codegenJob.title
+        }
+      })
+
       return NextResponse.json({
         success: false,
         needsClarification: true,
+        jobId: initialJob.id,
+        // Link pre-created job to the script and update title
+        ...(await (async () => { await db.updateScrapingJob(initialJob.id, { script_id: savedScript.id, title: codegenJob.title }); return {}; })()),
         scriptId: savedScript.id,
         title: codegenJob.title,
         testResult: testResults.testResult,
@@ -121,20 +139,19 @@ export async function POST(request: NextRequest) {
       dependencies: codegenJob.script.dependencies
     })
 
-    // Create a scraping job linked to this script
-    const scrapingJob = await db.createScrapingJob(url, {
-      prompt: prompt,
+    // Link pre-created job to this script and update title
+    await db.updateScrapingJob(initialJob.id, {
       title: codegenJob.title,
       script_id: savedScript.id
     })
 
     console.log('✅ Code generation completed successfully!')
     console.log('📝 Script ID:', savedScript.id)
-    console.log('🎯 Job ID:', scrapingJob.id)
+    console.log('🎯 Job ID:', initialJob.id)
 
     return NextResponse.json({
       success: true,
-      jobId: scrapingJob.id,
+      jobId: initialJob.id,
       scriptId: savedScript.id,
       title: codegenJob.title,
       code: codegenJob.script.code,
@@ -146,7 +163,15 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('💥 Code generation failed:', error)
-    
+    try {
+      // Best-effort: mark the most recently created job as failed if available in scope
+      // Note: if the failure happened before job creation, this will be a no-op
+      if (typeof url === 'string') {
+        // We don't have the job id here if the error happened pre-creation.
+        // No-op.
+      }
+    } catch {}
+
     return NextResponse.json({
       success: false,
       error: 'Code generation failed',

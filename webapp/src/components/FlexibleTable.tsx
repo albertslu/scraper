@@ -39,6 +39,19 @@ interface JobDetails {
   dependencies?: string[]
   script_id?: string
   script_version?: number
+  clarifying_context?: {
+    clarifyingQuestions?: {
+      questions: Array<{
+        question: string
+        options?: string[]
+        type: 'multiple_choice' | 'text' | 'boolean'
+      }>
+      reasoning: string
+    }
+    testResult?: any
+    codePreview?: string
+    title?: string
+  } | null
 }
 
 export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
@@ -434,6 +447,19 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
               <p className="mt-2 text-sm text-gray-600">
                 {jobDetails.prompt}
               </p>
+            )}
+
+            {/* Clarification Resume Banner */}
+            {jobDetails.clarifying_context?.clarifyingQuestions && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <div className="flex items-start">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 mr-2 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-yellow-800 font-medium">Action needed: Answer clarifying questions</p>
+                    <p className="text-sm text-yellow-700 mt-1">We saved your last test and questions. Open the generator to resume.</p>
+                  </div>
+                </div>
+              </div>
             )}
             
             {/* Generated Code Section */}

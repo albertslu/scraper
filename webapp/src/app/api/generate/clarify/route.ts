@@ -63,12 +63,13 @@ ${Object.entries(clarifications).map(([question, answer]) =>
         dependencies: codegenJob.script.dependencies
       })
 
-      // Create a scraping job linked to this script
+      // Create a scraping job linked to this script and clear clarifying context
       const scrapingJob = await db.createScrapingJob(url, {
         prompt: enhancedPrompt,
         title: codegenJob.title,
         script_id: scriptId
       })
+      await db.updateScrapingJob(scrapingJob.id, { clarifying_context: null as any })
 
       return NextResponse.json({
         success: false, // Don't auto-proceed
@@ -111,12 +112,13 @@ ${Object.entries(clarifications).map(([question, answer]) =>
       dependencies: codegenJob.script.dependencies
     })
 
-    // Create a scraping job linked to this script
+    // Create a scraping job linked to this script and clear clarifying context
     const scrapingJob = await db.createScrapingJob(url, {
       prompt: enhancedPrompt,
       title: codegenJob.title,
       script_id: scriptId
     })
+    await db.updateScrapingJob(scrapingJob.id, { clarifying_context: null as any })
 
     console.log('✅ Script clarification completed successfully!')
     console.log('🎯 Job ID:', scrapingJob.id)

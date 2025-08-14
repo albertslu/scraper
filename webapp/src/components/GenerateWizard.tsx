@@ -5,6 +5,23 @@ import { Loader2, Play, Code, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, 
 
 interface GenerateWizardProps {
   onJobComplete: (jobId: string) => void
+  resume?: {
+    jobId: string
+    scriptId: string
+    clarifyingQuestions?: {
+      questions: Array<{
+        question: string
+        options?: string[]
+        type: 'multiple_choice' | 'text' | 'boolean'
+      }>
+      reasoning: string
+    }
+    testResult?: any
+    code?: string
+    title?: string
+    url: string
+    prompt: string
+  }
 }
 
 interface GenerationResult {
@@ -44,7 +61,7 @@ interface ExecutionResult {
 
 type WizardStep = 'input' | 'clarification' | 'validation' | 'preview' | 'execution'
 
-export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
+export function GenerateWizard({ onJobComplete, resume }: GenerateWizardProps) {
   const [currentStep, setCurrentStep] = useState<WizardStep>('input')
   const [prompt, setPrompt] = useState('')
   const [url, setUrl] = useState('')
@@ -54,6 +71,24 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({})
   const [validationFeedback, setValidationFeedback] = useState('')
+
+  // Resume flow from saved clarifications
+  // Set initial state if resume prop is provided
+  if (resume && !generationResult && currentStep === 'input') {
+    setPrompt(resume.prompt)
+    setUrl(resume.url)
+    setGenerationResult({
+      success: false,
+      jobId: resume.jobId,
+      scriptId: resume.scriptId,
+      title: resume.title,
+      code: resume.code,
+      needsClarification: !!resume.clarifyingQuestions,
+      testResult: resume.testResult,
+      clarifyingQuestions: resume.clarifyingQuestions
+    })
+    setCurrentStep(resume.clarifyingQuestions ? 'clarification' : 'preview')
+  }
 
   // Step 1: Handle prompt + URL submission
   const handleGenerate = async (e: React.FormEvent) => {
@@ -72,6 +107,17 @@ export function GenerateWizard({ onJobComplete }: GenerateWizardProps) {
 
       const data = await response.json()
       setGenerationResult(data)
+      // As soon as we have a jobId, deep-link to it so user can return later
+      try {
+        if (data?.jobId && typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          const newUrl = `${url.origin}/${data.jobId}`
+          window.history.replaceState({}, '', newUrl)
+          if (window.parent) {
+            window.parent.postMessage({ type: 'scraper/jobSelected', jobId: data.jobId }, '*')
+          }
+        }
+      } catch {}
 
       if (data.success) {
         setCurrentStep('preview')
