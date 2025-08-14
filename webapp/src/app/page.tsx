@@ -17,23 +17,50 @@ export default function Home() {
     setSelectedJobId(jobId)
     setViewMode('results')
     setRefreshKey(prev => prev + 1)
+    // Update URL to /<jobId> without reloading
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const newUrl = `${url.origin}/${jobId}`
+        window.history.replaceState({}, '', newUrl)
+      }
+    } catch {}
   }
 
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId)
     setViewMode('results')
+    // Update URL to /<jobId> without reloading
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const newUrl = `${url.origin}/${jobId}`
+        window.history.replaceState({}, '', newUrl)
+      }
+    } catch {}
   }
 
   const handleNewJob = () => {
     setViewMode('wizard')
     setSelectedJobId(undefined)
+    // Reset URL back to root
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        const newUrl = `${url.origin}/`
+        window.history.replaceState({}, '', newUrl)
+      }
+    } catch {}
   }
 
-  // Deep link support: if jobId is present in the query string, open results for that job
+  // Deep link support: read jobId from path (/jobId) or fallback to ?jobId=
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const jobId = params.get('jobId')
+    const current = new URL(window.location.href)
+    const pathParts = current.pathname.replace(/^\//, '').split('/')
+    const pathJobId = pathParts.length === 1 && pathParts[0] ? pathParts[0] : null
+    const queryJobId = current.searchParams.get('jobId')
+    const jobId = pathJobId || queryJobId
     if (jobId) {
       setSelectedJobId(jobId)
       setViewMode('results')
