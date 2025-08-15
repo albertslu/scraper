@@ -80,6 +80,22 @@ export class CodegenOrchestrator {
           };
         }
         console.log('✅ Site analysis complete.');
+        try {
+          console.log('--- Preflight (lite) summary ---');
+          console.log('URL:', siteSpec.url);
+          console.log('Title:', siteSpec.title);
+          console.log('Tool choice:', siteSpec.tool_choice);
+          console.log('Listing selector:', siteSpec.selectors?.listing_items || 'none');
+          console.log('Detail link selector:', siteSpec.selectors?.detail_links || 'none');
+          console.log('Pagination selector:', siteSpec.selectors?.pagination || 'none');
+          console.log('Load more selector:', siteSpec.selectors?.load_more || 'none');
+          console.log('Pagination strategy:', siteSpec.pagination_strategy?.type);
+          const wc = Array.isArray(siteSpec.wait_conditions) ? siteSpec.wait_conditions.map((w: any) => `${w.type}:${w.value}`).join(', ') : 'none';
+          console.log('Wait conditions:', wc);
+          const classes = siteSpec.artifacts?.dom_digest?.common_classes?.slice(0, 5) || [];
+          console.log('Common classes:', classes);
+          console.log('--------------------------------');
+        } catch {}
       } catch (e) {
         console.log('⚠️ Preflight analysis failed, using minimal context.');
         siteSpec = {
