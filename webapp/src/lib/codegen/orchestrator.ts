@@ -114,6 +114,18 @@ export class CodegenOrchestrator {
             source_location: 'TBD'
           }))
         };
+
+        // Even when preflight fails, preserve retry context so codegen can see previous code/tool
+        if (request.retryContext) {
+          (siteSpec as any).retry_context = {
+            previous_issues: request.retryContext.previousAttempt.issues,
+            previous_results: request.retryContext.previousAttempt.totalFound,
+            expected_results: request.retryContext.previousAttempt.expectedItems,
+            sample_data: request.retryContext.previousAttempt.sampleData,
+            previous_tool: request.retryContext.previousAttempt.previousToolType,
+            previous_code: request.retryContext.previousAttempt.previousCode
+          };
+        }
       }
 
       // Step 3: Generate initial code
