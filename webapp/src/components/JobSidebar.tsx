@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, CheckCircle2, XCircle, Loader2, Plus, Eye, Calendar, Hash } from 'lucide-react'
+import { Clock, CheckCircle2, XCircle, Loader2, Plus, Eye, Calendar, Hash, Trash2 } from 'lucide-react'
 
 interface Job {
   job_id: string
@@ -73,6 +73,22 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
   const loadMore = () => {
     if (!hasMore || isLoadingMore) return
     fetchJobs(offset, limit, false)
+  }
+
+  const deleteJob = async (jobId: string) => {
+    if (!confirm('Delete this job and its data?')) return
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete job')
+      setJobs(prev => prev.filter(j => j.job_id !== jobId))
+      if (selectedJobId === jobId) {
+        onNewJob()
+      }
+      // Decrement total count locally if known
+      setTotalCount(prev => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete job')
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -250,6 +266,13 @@ export function JobSidebar({ selectedJobId, onJobSelect, onNewJob, refreshKey }:
                       </span>
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteJob(job.job_id) }}
+                    title="Delete job"
+                    className="ml-2 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {/* Job Description */}

@@ -215,6 +215,17 @@ export const db = {
     }
   },
 
+  async deleteScrapingJob(id: string): Promise<{ deleted: boolean }> {
+    // Use admin client to bypass RLS for deletes
+    const { error } = await supabaseAdmin
+      .from('scraping_jobs')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+    return { deleted: true }
+  },
+
   // ========== SCRAPED DATA (Flexible) ==========
   
   async insertScrapedData(jobId: string, dataItems: Record<string, any>[]): Promise<ScrapedData[]> {

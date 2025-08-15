@@ -80,3 +80,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }, { status: 500 })
   }
 } 
+
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params
+    const jobId = id
+
+    if (!jobId) {
+      return NextResponse.json({ error: 'Job ID is required' }, { status: 400 })
+    }
+
+    // Cascade deletes will remove related rows thanks to FK ON DELETE CASCADE
+    await db.deleteScrapingJob(jobId)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('❌ Failed to delete job:', error)
+    return NextResponse.json({
+      error: 'Failed to delete job',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 })
+  }
+}
