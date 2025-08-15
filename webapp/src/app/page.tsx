@@ -33,7 +33,33 @@ export default function Home() {
 
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId)
-    setViewMode('results')
+    // Check if this job has clarifying context saved; if so, resume wizard
+    fetch(`/api/jobs/${jobId}`).then(async (r) => {
+      if (!r.ok) {
+        setViewMode('results')
+        return
+      }
+      const data = await r.json()
+      const job = data.job
+      if (job?.clarifying_context) {
+        setResumeContext({
+          jobId,
+          scriptId: job.script_id,
+          clarifyingQuestions: job.clarifying_context.clarifyingQuestions,
+          testResult: job.clarifying_context.testResult,
+          code: job.clarifying_context.codePreview,
+          title: job.clarifying_context.title,
+          url: job.url,
+          prompt: job.prompt
+        })
+        setViewMode('wizard')
+      } else {
+        setResumeContext(null)
+        setViewMode('results')
+      }
+    }).catch(() => {
+      setViewMode('results')
+    })
     // Notify parent (admin) and update URL locally
     try {
       if (typeof window !== 'undefined') {
@@ -127,7 +153,7 @@ export default function Home() {
         <div className="flex-1 flex flex-col bg-white">
           {viewMode === 'wizard' ? (
             <div className="flex-1 overflow-auto p-6">
-              <GenerateWizard onJobComplete={handleJobComplete} resume={resumeContext || undefined} />
+              <GenerateWizard key={resumeContext?.jobId || 'wizard'} onJobComplete={handleJobComplete} resume={resumeContext || undefined} />
             </div>
           ) : selectedJobId ? (
             <FlexibleTable 
