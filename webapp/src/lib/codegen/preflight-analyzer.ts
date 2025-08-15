@@ -28,6 +28,8 @@ export class PreflightAnalyzer {
 
       // Build a minimal deterministic SiteSpec using heuristics
       const bestListing = artifacts.listItemAnalysis.find((i: any) => i.count >= 3);
+      const robustListing = (artifacts as any).selectorCandidates?.listing_containers?.[0]
+        || bestListing?.path;
       const paginationType = artifacts.paginationAnalysis.hasInfiniteScroll
         ? 'infinite_scroll'
         : (artifacts.paginationAnalysis.hasNextButton ? 'button_click' : (artifacts.paginationAnalysis.hasUrlPagination ? 'url_params' : 'none'));
@@ -44,7 +46,7 @@ export class PreflightAnalyzer {
           { type: 'listing', url_pattern: url, description: 'Primary listing page detected by heuristics' }
         ],
         selectors: {
-          listing_items: bestListing?.path,
+          listing_items: robustListing,
           detail_links: undefined,
           pagination: artifacts.paginationAnalysis.hasNextButton ? 'button:has-text("next"), a:has-text("next")' : undefined,
           load_more: artifacts.paginationAnalysis.hasLoadMore ? 'button:has-text("load more"), a:has-text("show more")' : undefined,
@@ -62,7 +64,7 @@ export class PreflightAnalyzer {
           type: paginationType,
           details: {}
         },
-        wait_conditions: bestListing?.path ? [{ type: 'selector', value: bestListing.path, timeout_ms: 5000 }] : [],
+        wait_conditions: robustListing ? [{ type: 'selector', value: robustListing, timeout_ms: 5000 }] : [],
         tool_choice: requirements.toolRecommendation,
         tool_reasoning: requirements.reasoning,
         artifacts: {
@@ -76,7 +78,7 @@ export class PreflightAnalyzer {
           nav_profile: renderResult.navProfile
         },
         uncertainties: [
-          !bestListing?.path ? 'Listing selector uncertain' : '',
+          !robustListing ? 'Listing selector uncertain' : '',
           artifacts.paginationAnalysis.hasInfiniteScroll ? 'Infinite scroll handling may be required' : ''
         ].filter(Boolean),
         warnings: artifacts.heuristics.protection_detected ? artifacts.heuristics.protection_details : []
@@ -238,6 +240,14 @@ export class PreflightAnalyzer {
     
     // Detect list items using heuristics
     const listItemAnalysis = await this.detectListItems(page);
+
+    // Lift candidate selectors to robust container ancestors and exclude decorative nodes
+    const containerCandidates = Array.from(new Set(
+      listItemAnalysis
+        .slice(0, 8)
+        .map((item: any) => this.liftToContainerSelector(item.path))
+        .filter((s: string | undefined) => !!s && !/(^|\s)(head|meta|svg|path)(\s|#|\.|$)/i.test(s as string))
+    ));
     
     // Check pagination patterns
     const paginationAnalysis = await this.detectPagination(page);
@@ -284,8 +294,25 @@ export class PreflightAnalyzer {
       detailDigest,
       networkSummary,
       heuristics,
-      title: renderResult.title
+      title: renderResult.title,
+      selectorCandidates: {
+        listing_containers: containerCandidates
+      }
     };
+  }
+
+  private liftToContainerSelector(path: string | undefined): string | undefined {
+    if (!path) return undefined;
+    // Split by ' > ' and remove trailing decorative tags, then lift to a reasonable container depth
+    const parts = path.split(' > ');
+    while (parts.length && /(svg|path|meta|head)$/i.test(parts[parts.length - 1])) {
+      parts.pop();
+    }
+    // Lift up one level to get the container if very specific leaf
+    if (parts.length > 2) {
+      return parts.slice(0, parts.length - 1).join(' > ');
+    }
+    return parts.join(' > ');
   }
 
   private async detectListItems(page: Page) {

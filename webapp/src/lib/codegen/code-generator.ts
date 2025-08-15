@@ -686,11 +686,11 @@ ${siteSpec.protection_detected ? '🛡️ **PROTECTION DETECTED**: Use stealth m
 ${siteSpec.micro_test_results ? (siteSpec.micro_test_results.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This can be normal for multi-page tasks. If listing selectors are valid, still generate FULL PRODUCTION CODE.') : ''}
 
 **CRITICAL INSTRUCTIONS:**
-1. You MUST use ONLY the validated selectors and field mappings listed above
-2. These selectors have been tested on the actual page with micro-testing and are guaranteed to work
+1. If selector confidence is high (explicitly provided and looks like a container), use the provided selectors; otherwise, infer robust listing container and field selectors from page structure (prefer container ancestors over icons/svg)
+2. If any field mapping shows \`TBD\`, propose and wire a concrete selector for that field based on the page structure
 3. Follow the exact extraction strategy and tool choice specified
 4. Use the provided field mappings for data extraction
-5. DO NOT create your own selectors or guess - use exactly what is provided
+5. Do not guess when high-confidence selectors are provided; when uncertain, infer robust selectors and validate with small samples
 6. **ALWAYS clean and validate extracted text data:**
    - Remove extra whitespace and newlines
    - Truncate overly long text (company names should be < 100 chars)
