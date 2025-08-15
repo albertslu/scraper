@@ -33,7 +33,11 @@ export class ModalExecutionModule {
       console.log('🚀 Starting Modal script execution...');
       console.log(`📝 Script ID: ${script.id}`);
       console.log(`🛠️ Tool: ${script.toolType}`);
-      console.log(`⏱️ Timeout: ${execConfig.timeout / 1000}s`);
+      // Bump Stagehand timeout to reduce cold-start failures in tests
+      const stagehandBias = script.toolType.toLowerCase().includes('stagehand');
+      const desiredTimeoutSec = Math.floor(execConfig.timeout / 1000);
+      const timeoutSeconds = stagehandBias && desiredTimeoutSec < 180 ? 180 : desiredTimeoutSec;
+      console.log(`⏱️ Timeout: ${timeoutSeconds}s`);
       console.log(`📊 Max Items: ${execConfig.maxItems}`);
       
       // Prepare Modal execution request
@@ -43,7 +47,7 @@ export class ModalExecutionModule {
         tool_type: script.toolType,
         max_items: execConfig.maxItems,
         test_mode: execConfig.testMode,
-        timeout_seconds: Math.floor(execConfig.timeout / 1000)
+        timeout_seconds: timeoutSeconds
       };
 
       console.log('🔧 Prepared script for Modal execution');

@@ -84,10 +84,14 @@ export const db = {
   // ========== SCRAPER SCRIPTS ==========
   
   async createScraperScript(script: Omit<ScraperScript, 'id' | 'created_at' | 'updated_at' | 'version'>): Promise<ScraperScript> {
+    // Normalize tool type to satisfy DB constraint (no 'playwright-stealth' in CHECK)
+    const normalizedToolType = (script.tool_type === 'playwright-stealth') ? 'playwright' : script.tool_type
+
     const { data, error } = await supabase
       .from('scraper_scripts')
       .insert({
         ...script,
+        tool_type: normalizedToolType,
         version: 1
       })
       .select()
@@ -112,9 +116,15 @@ export const db = {
   },
 
   async updateScraperScript(id: string, updates: Partial<Omit<ScraperScript, 'id' | 'created_at' | 'updated_at'>>): Promise<ScraperScript> {
+    // Normalize tool type if provided
+    const normalized = {
+      ...updates,
+      ...(updates.tool_type ? { tool_type: updates.tool_type === 'playwright-stealth' ? 'playwright' : updates.tool_type } : {})
+    }
+
     const { data, error } = await supabase
       .from('scraper_scripts')
-      .update(updates)
+      .update(normalized)
       .eq('id', id)
       .select()
       .single()

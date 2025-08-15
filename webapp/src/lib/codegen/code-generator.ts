@@ -129,6 +129,8 @@ export class CodeGenerator {
       : (tool === 'stagehand' || tool === 'hybrid' || tool === 'playwright-stealth')
         ? `\n\n--- EXEMPLAR (Stagehand) ---\n${STAGEHAND_EXEMPLAR}`
         : '';
+
+    const transfer = `\n\n--- TRANSFER INSTRUCTIONS ---\nReference success case (BBB directory): successful scrape for\nhttps://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing&page=1\n\nNow, for a completely new site and a new prompt, write a new scraper for that site. Site-specific URLs, selectors, and logic will differ from the example.\n\nGuidelines:\n- If selectors, hints, or artifacts are provided in context, use them; otherwise infer reliably from the rendered page with robust fallbacks.\n- Pagination: detect and implement the actual pattern (URL params, next/prev buttons, load-more, infinite scroll).\n- Field extraction: implement with specific selectors and fallbacks; validate against the schema.\n- Waits/timeouts: prefer domcontentloaded + short settle; add explicit waitForSelector for key elements.\n- Anti-bot/stealth: enable only when protection signals are present; honor any provided nav profile (user agent, headless, args) if available.\n- Stagehand schema rules: fields must be required or nullable (avoid .optional()); avoid z.string().url()—use z.string() and validate URL format yourself.\n- Replace all placeholders (e.g., TARGET_URL_HERE) with concrete values; no TODOs.\n- Enforce a time budget: early stop and periodic partial-results logging.`;
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code that follows EXACT templates for consistent execution.
 
 CRITICAL: You MUST follow these templates exactly. Do not deviate from the structure.
@@ -626,7 +628,7 @@ Analyze the target website and think about the optimal JSON schema and extractio
 - How to structure schemas for reliable extraction
 - The most efficient navigation pattern
 
-Generate production-ready code that can be executed immediately without any modifications.${exemplar}`;
+Generate production-ready code that can be executed immediately without any modifications.${exemplar}${transfer}`;
   }
 
   private getUserPrompt(requirements: ScrapingRequirements, url: string, siteSpec?: any): string {

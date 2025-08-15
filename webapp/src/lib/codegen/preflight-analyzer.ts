@@ -72,7 +72,8 @@ export class PreflightAnalyzer {
             sample_items: artifacts.domDigest.sample_items
           },
           detail_digest: undefined,
-          network_summary: artifacts.networkSummary
+          network_summary: artifacts.networkSummary,
+          nav_profile: renderResult.navProfile
         },
         uncertainties: [
           !bestListing?.path ? 'Listing selector uncertain' : '',
@@ -163,7 +164,7 @@ export class PreflightAnalyzer {
     }
     
     // Always use browser for comprehensive analysis
-    this.browser = await chromium.launch({ headless: true });
+    this.browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
     const context = await this.browser.newContext();
     const page = await context.newPage();
     
@@ -197,13 +198,17 @@ export class PreflightAnalyzer {
       }
     });
     
-    // Navigate and wait for content
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    // Navigate and wait for content (use networkidle but be ready to fall back)
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 }).catch(async () => {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    });
     await page.waitForTimeout(3000); // Let dynamic content settle
     
-    // Capture final DOM
+    // Capture final DOM and nav profile
     const finalHtml = await page.content();
     const title = await page.title();
+    const userAgent = await page.evaluate(() => navigator.userAgent).catch(() => undefined as any);
+    const viewport = page.viewportSize();
     
     return {
       staticHtml,
@@ -211,7 +216,15 @@ export class PreflightAnalyzer {
       title,
       networkCalls,
       consoleErrors,
-      page // Keep for further analysis
+      page, // Keep for further analysis
+      navProfile: {
+        browser: 'chromium',
+        headless: true,
+        args: ['--disable-blink-features=AutomationControlled'],
+        user_agent: userAgent,
+        viewport,
+        wait_until: 'networkidle'
+      }
     };
   }
 
