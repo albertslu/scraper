@@ -130,7 +130,7 @@ export class CodeGenerator {
         ? `\n\n--- EXEMPLAR (Stagehand) ---\n${STAGEHAND_EXEMPLAR}`
         : '';
 
-    const transfer = `\n\n--- TRANSFER INSTRUCTIONS ---\nReference success case (BBB directory): successful scrape for\nhttps://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing&page=1\n\nNow, for a completely new site and a new prompt, write a new scraper for that site. Site-specific URLs, selectors, and logic will differ from the example.\n\nGuidelines:\n- If selectors, hints, or artifacts are provided in context, use them; otherwise infer reliably from the rendered page with robust fallbacks.\n- Pagination: detect and implement the actual pattern (URL params, next/prev buttons, load-more, infinite scroll).\n- Field extraction: implement with specific selectors and fallbacks; validate against the schema.\n- Waits/timeouts: prefer domcontentloaded + short settle; add explicit waitForSelector for key elements.\n- Anti-bot/stealth: enable only when protection signals are present; honor any provided nav profile (user agent, headless, args) if available.\n- Stagehand schema rules: fields must be required or nullable (avoid .optional()); avoid z.string().url()—use z.string() and validate URL format yourself.\n- Replace all placeholders (e.g., TARGET_URL_HERE) with concrete values; no TODOs.\n- Enforce a time budget: early stop and periodic partial-results logging.`;
+    const transfer = `\n\n--- TRANSFER INSTRUCTIONS ---\nReference success case (BBB directory): successful scrape for\nhttps://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing&page=1\n\nNow, for a completely new site and a new prompt, write a new scraper for that site. Site-specific URLs, selectors, and logic will differ from the example.\n\nGuidelines:\n- If selectors, hints, or artifacts are provided in context, use them; otherwise infer reliably from the rendered page with robust fallbacks.\n- Pagination: detect and implement the actual pattern (URL params, next/prev buttons, load-more, infinite scroll).\n- Field extraction: implement with specific selectors and fallbacks; validate against the schema.\n- Waits/timeouts: prefer domcontentloaded + short settle; add explicit waitForSelector for key elements.\n- Anti-bot/stealth: enable only when protection signals are present; honor any provided nav profile (user agent, headless, args) if available.\n- If a nav profile (user agent, args, headers, waitUntil) is provided, mirror it when launching the browser/context.\n- If navigation fails with an HTTP/2 protocol error, retry once with HTTP/2 disabled (add '--disable-http2' to launch args) and a realistic user agent and headers.\n- Read proxy, user agent, and extra headers from environment variables when present (PROXY_SERVER/USERNAME/PASSWORD, CUSTOM_USER_AGENT, EXTRA_HEADERS_JSON).\n- Stagehand schema rules (OpenAI-safe): ALWAYS use a flat z.object for ItemSchema in page.extract (no arrays). Build arrays by looping and pushing validated objects. Avoid z.string().url(); use z.string() and validate URLs yourself.\n- Replace all placeholders (e.g., TARGET_URL_HERE) with concrete values; no TODOs.\n- Enforce a time budget: early stop and periodic partial-results logging.`;
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code that follows EXACT templates for consistent execution.
 
 CRITICAL: You MUST follow these templates exactly. Do not deviate from the structure.
@@ -192,14 +192,17 @@ export async function main(): Promise<any[]> {
     // STEP 3: Apply the specific field locations and selectors from the analysis
     
     // EXAMPLE EXTRACTION (replace with your actual logic):
-    const extractedData = await page.extract({
-      instruction: "Find all items on this page and extract the specified fields for each one",
-      schema: ItemSchema  // ✅ CRITICAL: Use schema directly, NOT z.array(ItemSchema)
+    // IMPORTANT: On OpenAI, page.extract expects a single-object schema, not an array.
+    // Build arrays by calling extract in a loop and pushing validated objects.
+    const item = await page.extract({
+      instruction: "Extract one listing's fields from the current page",
+      schema: ItemSchema
     });
-    
-    // Stagehand automatically returns an array of objects matching your schema
-    if (extractedData && Array.isArray(extractedData)) {
-      results.push(...extractedData);
+    if (item && typeof item === 'object') {
+      const parsed = ItemSchema.safeParse(item);
+      if (parsed.success) {
+        results.push(parsed.data);
+      }
     }
     
     // Add pagination logic if needed based on analysis results
