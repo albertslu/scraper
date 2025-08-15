@@ -38,6 +38,14 @@ export class CodeGenerator {
         console.log(userPrompt.slice(-1000));
         console.log('--- PROMPT TAIL END ---');
       }
+      // Log full page hints JSON if present (no truncation)
+      const pageHints = (siteSpec as any)?.retry_context?.page_hints;
+      if (pageHints) {
+        try {
+          console.log('PAGE HINTS JSON (full):');
+          console.log(JSON.stringify(pageHints, null, 2));
+        } catch {}
+      }
       
       const response = await this.anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
@@ -739,7 +747,7 @@ ${siteSpec.retry_context.previous_code}
 
 ${siteSpec && siteSpec.retry_context && siteSpec.retry_context.page_hints ? `
 **PAGE HINTS (JSON):**
-${JSON.stringify(siteSpec.retry_context.page_hints).substring(0, 1500)}
+${JSON.stringify(siteSpec.retry_context.page_hints)}
 ` : ''}
 
 

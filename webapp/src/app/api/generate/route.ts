@@ -32,10 +32,65 @@ export async function POST(request: NextRequest) {
       testTimeout: 30000
     })
 
-    // Create scraping request with clarifications
+    // Build lightweight page hints JSON (title, pagination flags/labels, compact DOM digest)
+    let pageHints: any
+    try {
+      const res = await fetch(url, { method: 'GET' })
+      const html = await res.text()
+      const lower = html.toLowerCase()
+
+      const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i)
+      const pageTitle = titleMatch?.[1]?.trim()
+
+      const labels: string[] = []
+      if (lower.includes('load more')) labels.push('load more')
+      if (lower.includes('show more')) labels.push('show more')
+      if (lower.includes('next')) labels.push('next')
+      if (lower.includes('prev')) labels.push('prev')
+      if (lower.match(/page\s*\d+/)) labels.push('page N')
+
+      const classMatches = Array.from(html.matchAll(/class\s*=\s*"([^"]+)"/gi))
+      const classCounts: Record<string, number> = {}
+      classMatches.slice(0, 2000).forEach((m) => {
+        const parts = m[1].split(/\s+/).slice(0, 2)
+        parts.forEach((c) => { if (!c) return; classCounts[c] = (classCounts[c] || 0) + 1 })
+      })
+      const commonClasses = Object.entries(classCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([n]) => n)
+
+      const idMatches = Array.from(html.matchAll(/id\s*=\s*"([^"]+)"/gi))
+      const idCounts: Record<string, number> = {}
+      idMatches.slice(0, 2000).forEach((m) => { const id = m[1]; if (id) idCounts[id] = (idCounts[id] || 0) + 1 })
+      const commonIds = Object.entries(idCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([n]) => n)
+
+      pageHints = {
+        pageTitle,
+        pagination: {
+          hasLoadMore: labels.includes('load more') || labels.includes('show more'),
+          hasNext: labels.includes('next'),
+          labels: Array.from(new Set(labels))
+        },
+        domDigest: { commonClasses, commonIds },
+        contentLength: html.length
+      }
+    } catch {}
+
+    // Create scraping request with clarifications and page hints
     const scrapingRequest: ScrapingRequest = {
       url,
-      prompt: clarifications ? `${prompt}\n\nUser clarifications: ${JSON.stringify(clarifications)}` : prompt
+      prompt: clarifications ? `${prompt}\n\nUser clarifications: ${JSON.stringify(clarifications)}` : prompt,
+      retryContext: pageHints ? {
+        previousAttempt: {
+          totalFound: 0,
+          expectedItems: 0,
+          issues: ['initial generation'],
+          sampleData: [],
+          previousToolType: 'unknown',
+          previousCode: ''
+        },
+        retryStrategy: ['initial generation'],
+        isRetry: false,
+        pageHints
+      } : undefined
     }
 
     // Execute the code generation pipeline
