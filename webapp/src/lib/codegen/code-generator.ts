@@ -28,6 +28,16 @@ export class CodeGenerator {
       console.log('--- PROMPT START ---');
       console.log(userPrompt.substring(0, 2000)); // First 2000 chars
       console.log('--- PROMPT END ---');
+      // Additional debug to verify previous code inclusion (may be beyond first 2000 chars)
+      const hasPrevCode = !!(siteSpec && siteSpec.retry_context && siteSpec.retry_context.previous_code);
+      console.log(`Included previous code in prompt: ${hasPrevCode ? 'yes' : 'no'}`);
+      if (hasPrevCode) {
+        const markerIndex = userPrompt.indexOf('----- BEGIN PREVIOUS CODE -----');
+        console.log(`Previous code marker present in prompt: ${markerIndex !== -1}`);
+        console.log('--- PROMPT TAIL (last 1000 chars) ---');
+        console.log(userPrompt.slice(-1000));
+        console.log('--- PROMPT TAIL END ---');
+      }
       
       const response = await this.anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
@@ -624,7 +634,7 @@ Comprehensive website analysis completed with validated selectors and tested ext
 
 **Page:** ${siteSpec.title}
 **URL:** ${siteSpec.url}
-**Analysis Confidence:** ${siteSpec.micro_test_results?.success ? 'HIGH' : 'MEDIUM'} (Micro-test ${siteSpec.micro_test_results?.success ? 'PASSED' : 'FAILED'})
+**Analysis Confidence:** ${siteSpec.micro_test_results ? (siteSpec.micro_test_results.success ? 'HIGH' : 'MEDIUM') : 'UNKNOWN'}${siteSpec.micro_test_results ? ` (Micro-test ${siteSpec.micro_test_results.success ? 'PASSED' : 'FAILED'})` : ''}
 
 **VALIDATED SELECTORS (TESTED ON LIVE SITE):**
 ${siteSpec.selectors.listing_items ? `- Listing Items: "${siteSpec.selectors.listing_items}" ✅ TESTED` : '- No listing items selector found'}
@@ -649,7 +659,7 @@ ${siteSpec.output_fields.map((field: any) =>
 ${siteSpec.protection_detected ? '🛡️ **PROTECTION DETECTED**: Use stealth mode appropriate for the chosen tool:\n  - Stagehand: Use BrowserBase env with stealth + CAPTCHA solving\n  - Playwright: Use stealth browser args and anti-detection scripts' : ''}
 
 **IMPORTANT NOTE FOR MULTI-PAGE SCRAPING:**
-${siteSpec.micro_test_results?.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This is NORMAL for multi-page scraping tasks. The listing selectors are VALID and TESTED. Generate FULL PRODUCTION CODE, not a limited test version.'}
+${siteSpec.micro_test_results ? (siteSpec.micro_test_results.success ? '' : 'The micro-test failed because it tried to extract detail-page fields from the listing page. This can be normal for multi-page tasks. If listing selectors are valid, still generate FULL PRODUCTION CODE.') : ''}
 
 **CRITICAL INSTRUCTIONS:**
 1. You MUST use ONLY the validated selectors and field mappings listed above
@@ -715,6 +725,24 @@ This approach combines Playwright's reliable pagination with Stagehand's intelli
 6. Add progress logging and debugging information
 7. **For large datasets (>20 items): Include periodic result output every 10-20 items to handle potential timeouts**
 ${siteSpec && siteSpec.protection_detected ? '\n8. **CRITICAL**: Enable anti-detection features for the chosen tool due to protection detected' : ''}
+
+${siteSpec && siteSpec.retry_context && siteSpec.retry_context.previous_code ? `
+**PREVIOUS IMPLEMENTATION CONTEXT:**
+The prior attempt used tool: ${siteSpec.retry_context.previous_tool || requirements.toolRecommendation}
+It encountered issues: ${(siteSpec.retry_context.previous_issues || []).join(', ') || 'N/A'}
+If the previous approach was close, prefer incremental fixes over full rewrites. Consider reusing working parts of the logic.
+
+Here is the previous code for reference (fix and improve if appropriate; do not blindly copy):
+\n\n----- BEGIN PREVIOUS CODE -----\n
+${siteSpec.retry_context.previous_code}
+\n----- END PREVIOUS CODE -----\n` : ''}
+
+${siteSpec && siteSpec.retry_context && siteSpec.retry_context.page_hints ? `
+**PAGE HINTS (JSON):**
+${JSON.stringify(siteSpec.retry_context.page_hints).substring(0, 1500)}
+` : ''}
+
+
 
 **PERIODIC RESULT OUTPUT AND TIME MANAGEMENT:**
 For large scraping jobs, include time checks and partial results:

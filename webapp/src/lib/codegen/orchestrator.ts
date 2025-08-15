@@ -66,7 +66,7 @@ export class CodegenOrchestrator {
       // Step 2: Skip slow site analysis - Canvas will validate through testing
       console.log('\n⏭️ Step 2: Skipping site analysis - Canvas will validate through testing...');
       
-      // Create minimal site context for code generation
+      // Create minimal site context for code generation (augment with retry context if present)
       const siteSpec = {
         url: request.url,
         title: 'Canvas Generation',
@@ -88,7 +88,16 @@ export class CodegenOrchestrator {
           description: field.description,
           extraction_method: 'css_selector',
           source_location: 'TBD' // LLM will determine
-        }))
+        })),
+        retry_context: request.retryContext ? {
+          previous_issues: request.retryContext.previousAttempt.issues,
+          previous_results: request.retryContext.previousAttempt.totalFound,
+          expected_results: request.retryContext.previousAttempt.expectedItems,
+          sample_data: request.retryContext.previousAttempt.sampleData,
+          previous_tool: request.retryContext.previousAttempt.previousToolType,
+          previous_code: request.retryContext.previousAttempt.previousCode,
+          page_hints: request.retryContext.pageHints
+        } : undefined
       };
 
       // Step 3: Generate initial code

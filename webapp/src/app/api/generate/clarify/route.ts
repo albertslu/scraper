@@ -31,10 +31,76 @@ ${Object.entries(clarifications).map(([question, answer]) =>
   `Q: ${question}\nA: ${answer}`
 ).join('\n\n')}`
 
-    // Create scraping request with clarifications
+    // Load existing script to include previous code context
+    const existingScript = await db.getScraperScript(scriptId)
+
+    // Build lightweight JSON page hints (title, pagination flags/labels, compact DOM digest)
+    let pageHints: ScrapingRequest['retryContext'] extends infer T ? T extends { pageHints: infer U } ? U : any : any
+    try {
+      const res = await fetch(url, { method: 'GET' })
+      const html = await res.text()
+      const lower = html.toLowerCase()
+
+      // Title
+      const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i)
+      const pageTitle = titleMatch?.[1]?.trim()
+
+      // Pagination labels
+      const labels: string[] = []
+      if (lower.includes('load more')) labels.push('load more')
+      if (lower.includes('show more')) labels.push('show more')
+      if (lower.includes('next')) labels.push('next')
+      if (lower.includes('prev')) labels.push('prev')
+      if (lower.match(/page\s*\d+/)) labels.push('page N')
+
+      // Compact DOM digest: top class/id names (regex based)
+      const classMatches = Array.from(html.matchAll(/class\s*=\s*"([^"]+)"/gi))
+      const classCounts: Record<string, number> = {}
+      classMatches.slice(0, 2000).forEach((m) => {
+        const parts = m[1].split(/\s+/).slice(0, 2)
+        parts.forEach((c) => { if (!c) return; classCounts[c] = (classCounts[c] || 0) + 1 })
+      })
+      const commonClasses = Object.entries(classCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([n]) => n)
+
+      const idMatches = Array.from(html.matchAll(/id\s*=\s*"([^"]+)"/gi))
+      const idCounts: Record<string, number> = {}
+      idMatches.slice(0, 2000).forEach((m) => { const id = m[1]; if (id) idCounts[id] = (idCounts[id] || 0) + 1 })
+      const commonIds = Object.entries(idCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([n]) => n)
+
+      pageHints = {
+        pageTitle,
+        pagination: {
+          hasLoadMore: labels.includes('load more') || labels.includes('show more'),
+          hasNext: labels.includes('next'),
+          labels: Array.from(new Set(labels))
+        },
+        domDigest: {
+          commonClasses,
+          commonIds
+        },
+        contentLength: html.length
+      }
+    } catch (e) {
+      // Non-fatal; continue without hints
+    }
+
+    // Create scraping request with clarifications and previous code context
     const scrapingRequest: ScrapingRequest = {
       url,
-      prompt: enhancedPrompt
+      prompt: enhancedPrompt,
+      retryContext: existingScript ? {
+        previousAttempt: {
+          totalFound: 0,
+          expectedItems: 0,
+          issues: ["Regeneration with user clarifications"],
+          sampleData: [],
+          previousToolType: existingScript.tool_type,
+          previousCode: existingScript.generated_code
+        },
+        retryStrategy: ["Incorporate user clarifications into the original approach", "Fix issues rather than full rewrite if possible"],
+        isRetry: true,
+        pageHints
+      } : undefined
     }
 
     // Execute the code generation pipeline with clarifications
@@ -78,6 +144,7 @@ ${Object.entries(clarifications).map(([question, answer]) =>
         scriptId: scriptId,
         title: codegenJob.title,
         code: codegenJob.script.code,
+        previousCode: existingScript?.generated_code,
         explanation: codegenJob.script.explanation,
         testResult: testResults.testResult,
         sampleData: testResults.testResult.data || [],
@@ -94,6 +161,7 @@ ${Object.entries(clarifications).map(([question, answer]) =>
         testResult: testResults.testResult,
         clarifyingQuestions: testResults.clarifyingQuestions,
         code: codegenJob.script.code,
+        previousCode: existingScript?.generated_code,
         explanation: codegenJob.script.explanation,
         attempt: 2
       })

@@ -30,6 +30,7 @@ interface GenerationResult {
   scriptId?: string
   title?: string
   code?: string
+  previousCode?: string
   explanation?: string
   error?: string
   details?: string
@@ -701,6 +702,23 @@ export function GenerateWizard({ onJobComplete, resume }: GenerateWizardProps) {
         )}
 
         <div className="space-y-6">
+          {/* Show previous code for context */}
+          {generationResult?.previousCode && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-100">
+                <h3 className="text-sm font-medium text-gray-900 flex items-center">
+                  <Code className="w-4 h-4 mr-2" />
+                  Previous Script (for reference)
+                </h3>
+              </div>
+              <div className="p-4 max-h-80 overflow-auto">
+                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs">
+                  <code>{generationResult.previousCode}</code>
+                </pre>
+              </div>
+            </div>
+          )}
+
           {generationResult?.clarifyingQuestions?.questions.map((question, index) => (
             <div key={index} className="border border-gray-200 rounded-lg p-4">
               <label className="block text-sm font-medium text-gray-700 mb-3">
