@@ -16,20 +16,8 @@ export interface ScrapingRequest {
     };
     retryStrategy: string[];
     isRetry: boolean;
-    // Lightweight structured hints to guide codegen
-    pageHints?: {
-      pageTitle?: string;
-      pagination?: {
-        hasLoadMore?: boolean;
-        hasNext?: boolean;
-        labels?: string[];
-      };
-      domDigest?: {
-        commonClasses?: string[];
-        commonIds?: string[];
-      };
-      contentLength?: number;
-    };
+    // Optional full HTML context of the target page
+    pageHtml?: string;
   };
 }
 

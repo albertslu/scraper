@@ -96,7 +96,7 @@ export class CodegenOrchestrator {
           sample_data: request.retryContext.previousAttempt.sampleData,
           previous_tool: request.retryContext.previousAttempt.previousToolType,
           previous_code: request.retryContext.previousAttempt.previousCode,
-          page_hints: request.retryContext.pageHints
+          page_html: request.retryContext.pageHtml
         } : undefined
       };
 

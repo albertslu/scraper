@@ -39,11 +39,12 @@ export class CodeGenerator {
         console.log('--- PROMPT TAIL END ---');
       }
       // Log full page hints JSON if present (no truncation)
-      const pageHints = (siteSpec as any)?.retry_context?.page_hints;
-      if (pageHints) {
+      const pageHtml = (siteSpec as any)?.retry_context?.page_html;
+      if (pageHtml) {
         try {
-          console.log('PAGE HINTS JSON (full):');
-          console.log(JSON.stringify(pageHints, null, 2));
+          console.log('----- PAGE HTML (FULL) START -----');
+          console.log(pageHtml);
+          console.log('----- PAGE HTML (FULL) END -----');
         } catch {}
       }
       
@@ -745,9 +746,11 @@ Here is the previous code for reference (fix and improve if appropriate; do not 
 ${siteSpec.retry_context.previous_code}
 \n----- END PREVIOUS CODE -----\n` : ''}
 
-${siteSpec && siteSpec.retry_context && siteSpec.retry_context.page_hints ? `
-**PAGE HINTS (JSON):**
-${JSON.stringify(siteSpec.retry_context.page_hints)}
+${siteSpec && siteSpec.retry_context && siteSpec.retry_context.page_html ? `
+**PAGE HTML (TRUSTED CONTEXT):**
+\n\n----- BEGIN PAGE HTML -----\n
+${siteSpec.retry_context.page_html}
+\n----- END PAGE HTML -----\n
 ` : ''}
 
 
