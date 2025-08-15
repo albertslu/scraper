@@ -63,42 +63,42 @@ export class CodegenOrchestrator {
       console.log(`📊 Complexity: ${requirements.complexity}`);
       console.log(`📄 Fields: ${requirements.outputFields.length}`);
 
-      // Step 2: Skip slow site analysis - Canvas will validate through testing
-      console.log('\n⏭️ Step 2: Skipping site analysis - Canvas will validate through testing...');
-      
-      // Create minimal site context for code generation (augment with retry context if present)
-      const siteSpec = {
-        url: request.url,
-        title: 'Canvas Generation',
-        tool_choice: requirements.toolRecommendation,
-        tool_reasoning: `Selected ${requirements.toolRecommendation} based on complexity assessment`,
-        selectors: {
-          listing_items: null,
-          pagination: null,
-          load_more: null
-        },
-        pagination_strategy: {
-          type: 'single_page',
-          description: 'Canvas will determine pagination needs during testing'
-        },
-        output_fields: requirements.outputFields.map(field => ({
-          name: field.name,
-          type: field.type,
-          required: field.required,
-          description: field.description,
-          extraction_method: 'css_selector',
-          source_location: 'TBD' // LLM will determine
-        })),
-        retry_context: request.retryContext ? {
-          previous_issues: request.retryContext.previousAttempt.issues,
-          previous_results: request.retryContext.previousAttempt.totalFound,
-          expected_results: request.retryContext.previousAttempt.expectedItems,
-          sample_data: request.retryContext.previousAttempt.sampleData,
-          previous_tool: request.retryContext.previousAttempt.previousToolType,
-          previous_code: request.retryContext.previousAttempt.previousCode,
-          page_html: request.retryContext.pageHtml
-        } : undefined
-      };
+      // Step 2: Site analysis
+      console.log('\n🔎 Step 2: Running site analysis (Preflight lite)...');
+      let siteSpec: any;
+      try {
+        const analysis = await this.preflightAnalyzer.analyzeLite(request.url, requirements);
+        siteSpec = analysis.site_spec;
+        if (request.retryContext) {
+          siteSpec.retry_context = {
+            previous_issues: request.retryContext.previousAttempt.issues,
+            previous_results: request.retryContext.previousAttempt.totalFound,
+            expected_results: request.retryContext.previousAttempt.expectedItems,
+            sample_data: request.retryContext.previousAttempt.sampleData,
+            previous_tool: request.retryContext.previousAttempt.previousToolType,
+            previous_code: request.retryContext.previousAttempt.previousCode
+          };
+        }
+        console.log('✅ Site analysis complete.');
+      } catch (e) {
+        console.log('⚠️ Preflight analysis failed, using minimal context.');
+        siteSpec = {
+          url: request.url,
+          title: 'Canvas Generation',
+          tool_choice: requirements.toolRecommendation,
+          tool_reasoning: `Selected ${requirements.toolRecommendation} based on complexity assessment`,
+          selectors: { listing_items: null, pagination: null, load_more: null },
+          pagination_strategy: { type: 'single_page', description: 'Canvas will determine pagination needs during testing' },
+          output_fields: requirements.outputFields.map(field => ({
+            name: field.name,
+            type: field.type,
+            required: field.required,
+            description: field.description,
+            extraction_method: 'css_selector',
+            source_location: 'TBD'
+          }))
+        };
+      }
 
       // Step 3: Generate initial code
       await this.updateJobStatus(job, 'generating');

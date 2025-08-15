@@ -14,6 +14,94 @@ export class PreflightAnalyzer {
   }
 
   /**
+   * Lite analysis: deterministic Playwright-based probing only (no LLM, no micro-test)
+   * Returns a structured SiteSpec built from heuristics to guide codegen.
+   */
+  async analyzeLite(url: string, requirements: ScrapingRequirements): Promise<PreflightAnalysis> {
+    console.log('🔍 Starting Preflight Analysis (lite)...');
+    try {
+      // Step 1: Fetch & Render
+      const renderResult = await this.fetchAndRender(url);
+
+      // Step 2: Probe & Digest (no LLM)
+      const artifacts = await this.probeAndDigest(renderResult, url, requirements, false);
+
+      // Build a minimal deterministic SiteSpec using heuristics
+      const bestListing = artifacts.listItemAnalysis.find((i: any) => i.count >= 3);
+      const paginationType = artifacts.paginationAnalysis.hasInfiniteScroll
+        ? 'infinite_scroll'
+        : (artifacts.paginationAnalysis.hasNextButton ? 'button_click' : (artifacts.paginationAnalysis.hasUrlPagination ? 'url_params' : 'none'));
+
+      const siteSpec = {
+        url,
+        title: artifacts.title || 'Unknown Page',
+        analyzed_at: new Date().toISOString(),
+        needs_js: artifacts.heuristics.needs_js,
+        has_infinite_scroll: artifacts.paginationAnalysis.hasInfiniteScroll,
+        captcha_suspected: artifacts.heuristics.captcha_suspected,
+        has_apis: artifacts.heuristics.has_apis,
+        page_types: [
+          { type: 'listing', url_pattern: url, description: 'Primary listing page detected by heuristics' }
+        ],
+        selectors: {
+          listing_items: bestListing?.path,
+          detail_links: undefined,
+          pagination: artifacts.paginationAnalysis.hasNextButton ? 'button:has-text("next"), a:has-text("next")' : undefined,
+          load_more: artifacts.paginationAnalysis.hasLoadMore ? 'button:has-text("load more"), a:has-text("show more")' : undefined,
+          data_fields: {}
+        },
+        output_fields: requirements.outputFields.map(f => ({
+          name: f.name,
+          type: f.type,
+          required: f.required,
+          description: f.description,
+          extraction_method: 'css_selector',
+          source_location: 'TBD'
+        })),
+        pagination_strategy: {
+          type: paginationType,
+          details: {}
+        },
+        wait_conditions: bestListing?.path ? [{ type: 'selector', value: bestListing.path, timeout_ms: 5000 }] : [],
+        tool_choice: requirements.toolRecommendation,
+        tool_reasoning: requirements.reasoning,
+        artifacts: {
+          dom_digest: {
+            common_classes: artifacts.domDigest.commonClasses,
+            common_ids: artifacts.domDigest.commonIds,
+            sample_items: artifacts.domDigest.sample_items
+          },
+          detail_digest: undefined,
+          network_summary: artifacts.networkSummary
+        },
+        uncertainties: [
+          !bestListing?.path ? 'Listing selector uncertain' : '',
+          artifacts.paginationAnalysis.hasInfiniteScroll ? 'Infinite scroll handling may be required' : ''
+        ].filter(Boolean),
+        warnings: artifacts.heuristics.protection_detected ? artifacts.heuristics.protection_details : []
+      } as any;
+
+      // Simple confidence score based on available signals
+      const confidence = Math.max(0, Math.min(1, (
+        (bestListing?.path ? 0.3 : 0) +
+        (artifacts.domDigest.commonClasses.length > 0 ? 0.2 : 0) +
+        (artifacts.paginationAnalysis.hasNextButton || artifacts.paginationAnalysis.hasUrlPagination ? 0.2 : 0) +
+        (!artifacts.heuristics.protection_detected ? 0.2 : 0.0) +
+        0.1
+      )));
+
+      return {
+        site_spec: siteSpec,
+        confidence,
+        ready_for_codegen: true,
+        next_steps: confidence < 0.6 ? ['Validate selectors during test and adjust pagination handling'] : undefined
+      };
+    } finally {
+      await this.browser?.close();
+    }
+  }
+
+  /**
    * Main entry point: Turn "prompt + URL" into strict SiteSpec
    */
   async analyze(url: string, requirements: ScrapingRequirements, retryContext?: any): Promise<PreflightAnalysis> {
