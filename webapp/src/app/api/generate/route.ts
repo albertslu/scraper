@@ -163,14 +163,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('💥 Code generation failed:', error)
-    try {
-      // Best-effort: mark the most recently created job as failed if available in scope
-      // Note: if the failure happened before job creation, this will be a no-op
-      if (typeof url === 'string') {
-        // We don't have the job id here if the error happened pre-creation.
-        // No-op.
-      }
-    } catch {}
 
     return NextResponse.json({
       success: false,
