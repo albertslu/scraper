@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from 'dotenv';
 import { ScrapingRequirements, GeneratedScript } from './types';
+import { PLAYWRIGHT_EXEMPLAR, STAGEHAND_EXEMPLAR } from './examples';
 import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
@@ -19,15 +20,22 @@ export class CodeGenerator {
    * Generate executable scraping code from parsed requirements
    */
   async generateScript(requirements: ScrapingRequirements, url: string, siteSpec?: any): Promise<GeneratedScript> {
-    const systemPrompt = this.getSystemPrompt();
+    const selectedTool = requirements.toolRecommendation;
+    const systemPrompt = this.getSystemPrompt(selectedTool);
     const userPrompt = this.getUserPrompt(requirements, url, siteSpec);
 
     try {
-      // Debug: Log the actual prompt being sent to the AI
+      // Debug: Log prompt context (truncated)
       console.log('🔍 DEBUG: User prompt being sent to AI:');
       console.log('--- PROMPT START ---');
       console.log(userPrompt.substring(0, 2000)); // First 2000 chars
       console.log('--- PROMPT END ---');
+      console.log('🔍 DEBUG: System prompt (includes exemplar if applicable):');
+      console.log('--- SYSTEM PROMPT HEAD (first 1000 chars) ---');
+      console.log(systemPrompt.substring(0, 1000));
+      console.log('--- SYSTEM PROMPT LENGTH ---');
+      console.log(systemPrompt.length);
+      console.log('🔧 Exemplar selected for tool:', selectedTool);
       // Additional debug to verify previous code inclusion (may be beyond first 2000 chars)
       const hasPrevCode = !!(siteSpec && siteSpec.retry_context && siteSpec.retry_context.previous_code);
       console.log(`Included previous code in prompt: ${hasPrevCode ? 'yes' : 'no'}`);
@@ -115,7 +123,12 @@ export class CodeGenerator {
     }
   }
 
-  private getSystemPrompt(): string {
+  private getSystemPrompt(tool?: string): string {
+    const exemplar = tool === 'playwright'
+      ? `\n\n--- EXEMPLAR (Playwright) ---\n${PLAYWRIGHT_EXEMPLAR}`
+      : (tool === 'stagehand' || tool === 'hybrid' || tool === 'playwright-stealth')
+        ? `\n\n--- EXEMPLAR (Stagehand) ---\n${STAGEHAND_EXEMPLAR}`
+        : '';
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code that follows EXACT templates for consistent execution.
 
 CRITICAL: You MUST follow these templates exactly. Do not deviate from the structure.
@@ -613,7 +626,7 @@ Analyze the target website and think about the optimal JSON schema and extractio
 - How to structure schemas for reliable extraction
 - The most efficient navigation pattern
 
-Generate production-ready code that can be executed immediately without any modifications.`;
+Generate production-ready code that can be executed immediately without any modifications.${exemplar}`;
   }
 
   private getUserPrompt(requirements: ScrapingRequirements, url: string, siteSpec?: any): string {
