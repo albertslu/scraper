@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from 'dotenv';
 import { ScrapingRequirements, GeneratedScript } from './types';
-import { PLAYWRIGHT_EXEMPLAR, STAGEHAND_EXEMPLAR } from './examples';
+import { PLAYWRIGHT_EXEMPLAR, STAGEHAND_EXEMPLAR, PLAYWRIGHT_MINIDOCS } from './examples';
 import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
@@ -131,6 +131,10 @@ export class CodeGenerator {
         : '';
 
     const transfer = `\n\n--- TRANSFER INSTRUCTIONS ---\nReference success case (BBB directory): successful scrape for\nhttps://www.bbb.org/search?filter_category=60548-100&filter_category=60142-000&filter_ratings=A&find_country=USA&find_text=Medical+Billing&page=1\n\nNow, for a completely new site and a new prompt, write a new scraper for that site. Site-specific URLs, selectors, and logic will differ from the example.\n\nGuidelines:\n- If selectors, hints, or artifacts are provided in context, use them; otherwise infer reliably from the rendered page with robust fallbacks.\n- Pagination: detect and implement the actual pattern (URL params, next/prev buttons, load-more, infinite scroll).\n- Field extraction: implement with specific selectors and fallbacks; validate against the schema.\n- Waits/timeouts: prefer domcontentloaded + short settle; add explicit waitForSelector for key elements.\n- Anti-bot/stealth: enable only when protection signals are present; honor any provided nav profile (user agent, headless, args) if available.\n- If a nav profile (user agent, args, headers, waitUntil) is provided, mirror it when launching the browser/context.\n- If navigation fails with an HTTP/2 protocol error, retry once with HTTP/2 disabled (add '--disable-http2' to launch args) and a realistic user agent and headers.\n- Read proxy, user agent, and extra headers from environment variables when present (PROXY_SERVER/USERNAME/PASSWORD, CUSTOM_USER_AGENT, EXTRA_HEADERS_JSON).\n- Stagehand schema rules (OpenAI-safe): ALWAYS use a flat z.object for ItemSchema in page.extract (no arrays). Build arrays by looping and pushing validated objects. Avoid z.string().url(); use z.string() and validate URLs yourself.\n- Replace all placeholders (e.g., TARGET_URL_HERE) with concrete values; no TODOs.\n- Enforce a time budget: early stop and periodic partial-results logging.`;
+    const extraDocs = (tool === 'playwright' || tool === 'hybrid')
+      ? `\n\n--- PLAYWRIGHT MINI-DOCS ---\n${PLAYWRIGHT_MINIDOCS}`
+      : '';
+
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code that follows EXACT templates for consistent execution.
 
 CRITICAL: You MUST follow these templates exactly. Do not deviate from the structure.
@@ -631,7 +635,7 @@ Analyze the target website and think about the optimal JSON schema and extractio
 - How to structure schemas for reliable extraction
 - The most efficient navigation pattern
 
-Generate production-ready code that can be executed immediately without any modifications.${exemplar}${transfer}`;
+Generate production-ready code that can be executed immediately without any modifications.${exemplar}${transfer}${extraDocs}`;
   }
 
   private getUserPrompt(requirements: ScrapingRequirements, url: string, siteSpec?: any): string {
@@ -639,7 +643,11 @@ Generate production-ready code that can be executed immediately without any modi
       .map(field => `- ${field.name} (${field.type}): ${field.description} [${field.required ? 'Required' : 'Optional'}]`)
       .join('\n');
 
-    return `Generate scraping code for the following requirements:
+    const retryNote = siteSpec && siteSpec.retry_context && siteSpec.retry_context.note
+      ? `\n\nRETRY INSTRUCTIONS (from previous attempt and user notes):\n${siteSpec.retry_context.note}`
+      : '';
+
+    return `Generate scraping code for the following requirements:${retryNote}
 
 **Target URL:** ${url}
 **Target Data:** ${requirements.target}

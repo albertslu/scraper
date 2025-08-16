@@ -198,6 +198,17 @@ ${JSON.stringify(retryContext.previousAttempt.sampleData.slice(0, 2), null, 2)}`
 }
 
 Focus on addressing the specific issues that caused the previous attempt to fail or be incomplete.`;
+
+      // Strong nudge: on HTTP/2 or block signals, prefer Stagehand on the next attempt
+      const issues = (retryContext.previousAttempt.issues || []).join(' ');
+      const blockedSignals = /ERR_HTTP2_PROTOCOL_ERROR|Access denied|forbidden|CAPTCHA|verify you are human/i.test(issues);
+      if (blockedSignals) {
+        basePrompt += `
+
+🛡️ **BLOCKING SIGNALS DETECTED (HTTP/2 or anti-bot):**
+- For the next attempt, set toolRecommendation to 'stagehand' (not 'hybrid'), and explain why. Stagehand can navigate cookie/consent flows and dynamic rendering better under protection. Keep scope bounded to avoid timeouts (prefer first page).
+`;
+      }
     }
 
     return basePrompt;

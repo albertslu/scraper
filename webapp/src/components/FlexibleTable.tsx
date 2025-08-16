@@ -113,6 +113,8 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
     }
   }
 
+  const [userRetryPrompt, setUserRetryPrompt] = useState('')
+
   const handleRetry = async () => {
     if (!jobDetails) return
 
@@ -135,7 +137,8 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
         },
         body: JSON.stringify({ 
           jobId: jobDetails.id,
-          previousContext
+          previousContext,
+          userPrompt: userRetryPrompt || undefined
         }),
       })
 
@@ -581,6 +584,14 @@ export function FlexibleTable({ jobId, refreshKey }: FlexibleTableProps) {
                   {getRetryMessage().message}
                 </p>
                 <div className="mt-3">
+                  {/* User retry prompt */}
+                  <textarea
+                    placeholder="Add guidance for retry (e.g., focus on pagination next button; keep first page; dedupe; stop when no new items)"
+                    value={userRetryPrompt}
+                    onChange={(e) => setUserRetryPrompt(e.target.value)}
+                    className="w-full mb-2 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    rows={3}
+                  />
                   <button
                     onClick={handleRetry}
                     disabled={isRetrying}

@@ -11,7 +11,7 @@ interface PreviousContext {
 
 export async function POST(request: NextRequest) {
   try {
-    const { jobId, previousContext }: { jobId: string, previousContext: PreviousContext } = await request.json()
+    const { jobId, previousContext, userPrompt }: { jobId: string, previousContext: PreviousContext, userPrompt?: string } = await request.json()
     
     if (!jobId) {
       return NextResponse.json({ 
@@ -52,7 +52,12 @@ export async function POST(request: NextRequest) {
       console.log('🔄 Starting focused retry (skip prompt parsing → improved codegen → execute)...')
       console.log('📊 Using context from previous attempt')
 
-      // Create retry request (no prompt enhancement needed)
+      // Build an enhanced prompt summary (optional; core logic uses requirements)
+      const previousIssues = (previousContext.issues || []).join(', ')
+      const samplePreview = JSON.stringify((previousContext.previousResults || []).slice(0, 2))
+      const enhancedNote = `Previous Attempt Summary:\n- Tool Used: ${script.tool_type}\n- Items Found: ${previousContext.totalFound}/${previousContext.expectedItems}\n- Issues: ${previousIssues || 'N/A'}\n- Sample (truncated): ${samplePreview}\n${userPrompt ? `\nUser Retry Notes:\n${userPrompt}` : ''}`
+
+      // Retry request (prompt kept for record; enhanced note passed via retry_context)
       const retryRequest = {
         url: job.url,
         prompt: job.prompt || ''
@@ -65,7 +70,9 @@ export async function POST(request: NextRequest) {
         totalFound: previousContext.totalFound,
         expectedItems: previousContext.expectedItems,
         issues: previousContext.issues,
-        sampleData: previousContext.previousResults.slice(0, 3)
+        sampleData: previousContext.previousResults.slice(0, 3),
+        note: enhancedNote,
+        lockTool: previousContext.totalFound > 0 // prefer same tool when it already extracted some items
       }
 
       console.log('🚀 Executing retry codegen (reusing existing requirements)...')

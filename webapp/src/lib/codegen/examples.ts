@@ -165,4 +165,20 @@ export async function main(): Promise<any[]> {
 }
 `;
 
+export const PLAYWRIGHT_MINIDOCS = `
+Playwright scraping notes (TypeScript):
+
+- Setup & lifecycle: use chromium.launch({ headless: true }); create a BrowserContext with userAgent + viewport; newPage() for a tab; always close in finally.
+- Navigation & waits: prefer waitUntil 'domcontentloaded'; after goto, wait for a stable container locator before extracting.
+- Locators: use getByRole/getByText/getByLabel first; fallback to locator('css:visible'); avoid brittle XPath unless necessary.
+- Extract pattern: count a cards locator; iterate nth(i); innerText().trim(); attribute('href'); normalize URLs with new URL(href, page.url()).toString().
+- Pagination (next button): while true { extract; find Next link by role; if not visible break; click + wait for domcontentloaded }.
+- Pagination (URL param): for pageIndex from 1..N, goto(base + ?page=pageIndex), extract; stop when no new items.
+- Infinite scroll helper: mouse.wheel(0, step); pause; stop when body.scrollHeight stops increasing; cap steps.
+- API-first: waitForResponse(url includes '/api' and ok), parse json, map directly into { title, price, url } objects; faster and more stable than DOM.
+- Network control: route('**/*'): abort images/fonts, continue others; set extraHTTPHeaders in context if needed.
+- Timeouts & reliability: setDefaultTimeout 15000; setDefaultNavigationTimeout 30000; small random waits between actions; de-duplicate results; stop loops when no new items.
+- Optional hardening: if transport blocks, launch args may include disable-http2 and use realistic UA/headers/proxy.
+(Reference only; wire selectors/schema from current SiteSpec).`;
+
 

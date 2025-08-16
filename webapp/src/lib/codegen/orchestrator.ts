@@ -184,6 +184,8 @@ export class CodegenOrchestrator {
       expectedItems: number;
       issues: string[];
       sampleData: any[];
+      note?: string;
+      lockTool?: boolean;
     }
   ): Promise<CodegenJob> {
     const job: CodegenJob = {
@@ -205,8 +207,8 @@ export class CodegenOrchestrator {
       console.log(`🔧 Previous tool: ${retryContext.previousToolType}`);
       
       // Analyze retry strategy
-      const shouldSwitchTool = this.shouldSwitchTool(retryContext);
-      const recommendedTool = shouldSwitchTool 
+      const shouldSwitchTool = retryContext.lockTool ? false : this.shouldSwitchTool(retryContext);
+      const recommendedTool = shouldSwitchTool
         ? this.getAlternativeTool(retryContext.previousToolType, retryContext)
         : retryContext.previousToolType;
       
@@ -254,7 +256,10 @@ export class CodegenOrchestrator {
           previous_results: retryContext.totalFound,
           expected_results: retryContext.expectedItems,
           sample_data: retryContext.sampleData,
-          likely_popup_interference: retryContext.totalFound === 0 && retryContext.previousToolType === 'stagehand'
+          likely_popup_interference: retryContext.totalFound === 0 && retryContext.previousToolType === 'stagehand',
+          note: retryContext.note,
+          previous_tool: retryContext.previousToolType,
+          previous_code: retryContext.previousCode
         }
       };
 
