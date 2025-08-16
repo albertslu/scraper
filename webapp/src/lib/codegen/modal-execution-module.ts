@@ -33,10 +33,11 @@ export class ModalExecutionModule {
       console.log('🚀 Starting Modal script execution...');
       console.log(`📝 Script ID: ${script.id}`);
       console.log(`🛠️ Tool: ${script.toolType}`);
-      // Bump Stagehand timeout to reduce cold-start failures in tests
-      const stagehandBias = script.toolType.toLowerCase().includes('stagehand');
+      // Ensure heavy tools have enough time during tests
+      const toolLower = script.toolType.toLowerCase();
       const desiredTimeoutSec = Math.floor(execConfig.timeout / 1000);
-      const timeoutSeconds = stagehandBias && desiredTimeoutSec < 180 ? 180 : desiredTimeoutSec;
+      const isHeavyTool = toolLower.includes('stagehand') || toolLower.includes('playwright') || toolLower.includes('hybrid');
+      const timeoutSeconds = isHeavyTool && desiredTimeoutSec < 180 ? 180 : desiredTimeoutSec;
       console.log(`⏱️ Timeout: ${timeoutSeconds}s`);
       console.log(`📊 Max Items: ${execConfig.maxItems}`);
       
