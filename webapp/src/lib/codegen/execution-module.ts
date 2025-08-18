@@ -407,10 +407,45 @@ executeScript().catch(error => {
       processedLines.push(processedLine);
     }
     
-    return processedLines
+    // Join and normalize
+    let cleaned = processedLines
       .join('\n')
-      .replace(/^\s*\n+/, '') // Remove leading empty lines
-      .replace(/\n\n+/g, '\n\n'); // Normalize line breaks
+      .replace(/^\s*\n+/, '')
+      .replace(/\n\n+/g, '\n\n');
+
+    // Final safety pass: rewrite multi-argument page.evaluate calls
+    // Playwright only accepts a single serializable arg. We collapse extra args
+    // into an object and rebind original parameter names.
+    cleaned = this.rewriteMultiArgEvaluate(cleaned);
+
+    return cleaned;
+  }
+
+  /**
+   * Rewrite patterns like:
+   *   page.evaluate((a: string, b: string) => { /* body *\/ }, ARG1, ARG2)
+   * into:
+   *   page.evaluate((__args) => { const a = __args.a; const b = __args.b; /* body *\/ }, { a: ARG1, b: ARG2 })
+   * This is a best-effort sanitizer and intentionally conservative.
+   */
+  private rewriteMultiArgEvaluate(code: string): string {
+    const evalRegex = /page\.evaluate\s*\(\s*\(([^)]*?)\)\s*=>\s*\{([\s\S]*?)\}\s*,\s*([^,()\n]+)\s*,\s*([^,()\n]+)\s*\)/g;
+    return code.replace(evalRegex, (_m, paramsStr, body, arg1, arg2) => {
+      // Extract bare param names (strip types/defaults)
+      const names = String(paramsStr)
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .map((s: string) => s.replace(/[:=].*$/, '').trim())
+        .filter(Boolean);
+      if (names.length < 2) return _m; // Not our target pattern
+
+      const p1 = names[0];
+      const p2 = names[1];
+      const bindings = `const ${p1} = __args.${p1}; const ${p2} = __args.${p2};`;
+      const objArg = `{ ${p1}: ${arg1}, ${p2}: ${arg2} }`;
+      return `page.evaluate((__args) => { ${bindings} ${body} }, ${objArg})`;
+    });
   }
 
   /**

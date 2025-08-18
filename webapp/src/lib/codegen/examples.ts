@@ -46,7 +46,8 @@ export async function main(): Promise<any[]> {
       await page.waitForTimeout(2000);
 
       // Multi-selector link fallbacks (use SiteSpec selectors)
-      const urls = await page.evaluate((selA: string, selB: string) => {
+      const urls = await page.evaluate((__args) => {
+        const { selA, selB } = __args as { selA: string; selB: string };
         const set = new Set<string>();
         for (const sel of [selA, selB, 'a']) {
           document.querySelectorAll(sel).forEach(a => {
@@ -56,7 +57,7 @@ export async function main(): Promise<any[]> {
           if (set.size) break;
         }
         return Array.from(set);
-      }, '__DETAIL_LINK_SELECTOR__', '__LISTING_ITEM_SELECTOR__');
+      }, { selA: '__DETAIL_LINK_SELECTOR__', selB: '__LISTING_ITEM_SELECTOR__' });
 
       if (!urls.length) break;
       allUrls.push(...urls);

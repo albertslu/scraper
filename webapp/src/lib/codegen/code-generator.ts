@@ -137,6 +137,14 @@ export class CodeGenerator {
 
     return `You are an expert web scraping code generator. Your job is to create executable TypeScript code that follows EXACT templates for consistent execution.
 
+HARD RULES FOR PLAYWRIGHT:
+- All page.evaluate (and frame.evaluate) calls MUST accept a single object argument. Do NOT pass multiple arguments. Example:
+  // CORRECT
+  await page.evaluate(({ a, b }) => { /* use a,b */ }, { a: 'A', b: 'B' })
+  // INCORRECT
+  await page.evaluate((a, b) => { /* ... */ }, 'A', 'B')
+- Prefer destructuring inside the evaluate function body.
+
 CRITICAL: You MUST follow these templates exactly. Do not deviate from the structure.
 
 **STAGEHAND TEMPLATE (Use this for Stagehand-based scraping):**
