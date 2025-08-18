@@ -86,10 +86,15 @@ export async function POST(request: NextRequest) {
         dependencies: codegenJob.script.dependencies
       })
 
-      // Link pre-created job to the script and update title
+      // Link pre-created job to the script and update title, and persist validation context
       await db.updateScrapingJob(initialJob.id, {
         script_id: savedScript.id,
-        title: codegenJob.title
+        title: codegenJob.title,
+        validation_context: {
+          testResult: testResults.testResult,
+          codePreview: codegenJob.script.code,
+          title: codegenJob.title
+        }
       })
 
       return NextResponse.json({

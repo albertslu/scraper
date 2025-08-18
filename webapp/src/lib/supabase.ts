@@ -31,6 +31,7 @@ export interface ScrapingJob {
   execution_time?: number
   errors?: string[]
   clarifying_context?: any
+  validation_context?: any
 }
 
 export interface ScraperScript {
@@ -163,7 +164,7 @@ export const db = {
 
   async updateScrapingJob(
     id: string, 
-    updates: Partial<Pick<ScrapingJob, 'status' | 'completed_at' | 'total_companies' | 'total_items' | 'execution_time' | 'errors' | 'title' | 'script_id' | 'clarifying_context'>>
+    updates: Partial<Pick<ScrapingJob, 'status' | 'completed_at' | 'total_companies' | 'total_items' | 'execution_time' | 'errors' | 'title' | 'script_id' | 'clarifying_context' | 'validation_context'>>
   ): Promise<ScrapingJob> {
     const { data, error } = await supabase
       .from('scraping_jobs')

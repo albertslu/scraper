@@ -41,7 +41,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         dependencies: result.script?.dependencies,
         script_id: result.script?.id,
         script_version: result.script?.version,
-        clarifying_context: (result as any).job?.clarifying_context
+        clarifying_context: (result as any).job?.clarifying_context,
+        validation_context: (result as any).job?.validation_context
       }
     }
 

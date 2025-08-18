@@ -88,7 +88,7 @@ export function GenerateWizard({ onJobComplete, resume }: GenerateWizardProps) {
       testResult: resume.testResult,
       clarifyingQuestions: resume.clarifyingQuestions
     })
-    setCurrentStep(resume.clarifyingQuestions ? 'clarification' : 'preview')
+    setCurrentStep(resume.clarifyingQuestions ? 'clarification' : (resume.testResult ? 'validation' : 'preview'))
   }
 
   // Step 1: Handle prompt + URL submission

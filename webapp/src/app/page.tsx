@@ -53,6 +53,19 @@ export default function Home() {
           prompt: job.prompt
         })
         setViewMode('wizard')
+      } else if (job?.validation_context) {
+        // Resume validation step if testResult snapshot exists
+        setResumeContext({
+          jobId,
+          scriptId: job.script_id,
+          clarifyingQuestions: undefined,
+          testResult: job.validation_context.testResult,
+          code: job.validation_context.codePreview,
+          title: job.validation_context.title,
+          url: job.url,
+          prompt: job.prompt
+        })
+        setViewMode('wizard')
       } else {
         setResumeContext(null)
         setViewMode('results')
@@ -114,6 +127,18 @@ export default function Home() {
             testResult: job.clarifying_context.testResult,
             code: job.clarifying_context.codePreview,
             title: job.clarifying_context.title,
+            url: job.url,
+            prompt: job.prompt
+          })
+          setViewMode('wizard')
+        } else if (job?.validation_context) {
+          setResumeContext({
+            jobId,
+            scriptId: job.script_id,
+            clarifyingQuestions: undefined,
+            testResult: job.validation_context.testResult,
+            code: job.validation_context.codePreview,
+            title: job.validation_context.title,
             url: job.url,
             prompt: job.prompt
           })
